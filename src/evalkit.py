@@ -51,16 +51,26 @@ def false_alarm_rate(state, clean_homes, cooldown=COOLDOWN_DAYS):
     return n_on, home_days, 1000.0 * n_on / home_days
 
 
+def new_alarm_counts(state, clean_homes, cooldown=COOLDOWN_DAYS):
+    """Cate case curate pornesc o alarma NOUA in fiecare zi."""
+    cols = [h for h in clean_homes if h in state.columns]
+    counts = pd.Series(0, index=state.index, dtype=int)
+    for h in cols:
+        o = onsets(state[h], cooldown)
+        if len(o):
+            counts.loc[o] += 1
+    return counts, len(cols)
+
+
 def fault_results(state, labels, lost):
     rows = []
     end_all = state.index[-1] + pd.Timedelta(hours=23)
     for _, r in labels[labels["kind"] == "fault"].iterrows():
         h, s = r["home"], pd.Timestamp(r["start"]).normalize()
-        st = state[h].fillna(False).astype(bool)
-        fresh = st & ~st.shift(1, fill_value=False)          # zi in care alarma PORNESTE
-        cand = fresh[(fresh.index >= s) & fresh]
+        ons = onsets(state[h])                      # aceleasi alarme (cu pauza) ca la alarmele false
+        cand = ons[ons >= s]
         if len(cand):
-            d = cand.index[0]
+            d = cand[0]
             detected, delay, end = True, (d - s).days, d + pd.Timedelta(hours=23)
         else:
             detected, delay, end = False, np.nan, end_all
@@ -74,14 +84,16 @@ def load_results(state, labels):
     rows = []
     for _, r in labels[labels["kind"] == "load"].iterrows():
         h, s = r["home"], pd.Timestamp(r["start"]).normalize()
-        st = state[h].fillna(False).astype(bool)
-        fresh = st & ~st.shift(1, fill_value=False)
-        rows.append({"home": h, "type": r["type"], "alarmed": bool(fresh[(fresh.index >= s)].any())})
+        ons = onsets(state[h])
+        rows.append({"home": h, "type": r["type"], "alarmed": bool((ons >= s).any())})
     return pd.DataFrame(rows)
 
 
 def summarize(state, labels, lost, clean_homes):
-    n_on, home_days, per1000 = false_alarm_rate(state, clean_homes)
+    counts, n_clean = new_alarm_counts(state, clean_homes)
+    n_on, home_days = int(counts.sum()), n_clean * len(state)
+    per1000 = 1000.0 * n_on / home_days
+    wk = counts.rolling(7, min_periods=1).sum()
     fr = fault_results(state, labels, lost)
     per_type = fr.groupby("type").agg(
         n=("home", "count"),
@@ -97,7 +109,8 @@ def summarize(state, labels, lost, clean_homes):
     sim = state[clean_cols].sum(axis=1)
     return {"fa_onsets": n_on, "home_days": home_days, "fa_per_1000": per1000,
             "per_type": per_type, "per_load": per_load, "faults": fr,
-            "max_simultaneous_clean": int(sim.max()), "max_simultaneous_day": sim.idxmax()}
+            "max_simultaneous_clean": int(sim.max()), "max_simultaneous_day": sim.idxmax(),
+            "max_new_week": int(wk.max()), "max_new_week_day": wk.idxmax()}
 
 
 def overall_recall(summary):
@@ -111,12 +124,27 @@ def overall_delay(summary):
     return float(d.mean()) if len(d) else float("nan")
 
 
+def overall_kwh(summary):
+    """kWh de productie pierduti pana la detectie, media pe TOATE casele cu defect (nedetectate = pana la final)."""
+    f = summary["faults"]
+    return float(f["kwh_lost_until_detection"].mean()) if len(f) else float("nan")
+
+
+def pick_threshold(t, target):
+    """Alege pragul: minimizeaza kWh pierduti, cu conditia alarmelor false <= tinta.
+    t are coloanele: param, fa, recall, delay, kwh."""
+    ok = t[t["fa"] <= target]
+    if len(ok):
+        return ok.sort_values(["kwh", "fa"]).iloc[0], ""
+    return t.sort_values("fa").iloc[0], f"!! Nicio setare nu atinge tinta de {target}; am luat cea mai stricta."
+
+
 def print_summary(name, sm):
     print(f"\n=== {name} ===")
     print(f"Alarme false pe case curate: {sm['fa_onsets']} alarme in {sm['home_days']} zile-casa "
           f"= {sm['fa_per_1000']:.2f} la 1.000 zile-casa")
-    print(f"Cele mai multe case curate in alarma simultan: {sm['max_simultaneous_clean']} "
-          f"(in {sm['max_simultaneous_day']:%Y-%m-%d})")
+    print(f"Cele mai multe alarme NOI pe case curate intr-o fereastra de 7 zile: {sm['max_new_week']} "
+          f"(se termina {sm['max_new_week_day']:%Y-%m-%d})  <- arata valurile de alarme (ex. dupa vreme neobisnuita)")
     print("\nDefecte (ce trebuie prins):")
     print(sm["per_type"].to_string())
     print("\nConsum nou (NU trebuie sa dea alarma):")

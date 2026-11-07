@@ -60,7 +60,8 @@ def b1_prepare(net_train, net_period):
 
 
 def b1_state(runs, monitorable, N):
-    st = runs >= N
+    """Alarma in zilele in care seria fara export atinge N, 2N, 3N... (dupa fiecare alarma contorul se reseteaza)."""
+    st = (runs > 0) & (runs % N == 0)
     st.loc[:, ~monitorable.reindex(st.columns).fillna(False).to_numpy()] = False
     return st
 
@@ -88,15 +89,9 @@ def calibrate(make_state, grid, labels, lost, clean, target):
     for g in grid:
         sm = ev.summarize(make_state(g), labels, lost, clean)
         rows.append({"param": g, "fa": sm["fa_per_1000"], "recall": ev.overall_recall(sm),
-                     "delay": ev.overall_delay(sm)})
+                     "delay": ev.overall_delay(sm), "kwh": ev.overall_kwh(sm)})
     t = pd.DataFrame(rows)
-    ok = t[t["fa"] <= target]
-    if len(ok):
-        best = ok.sort_values(["recall", "delay"], ascending=[False, True]).iloc[0]
-        note = ""
-    else:
-        best = t.sort_values("fa").iloc[0]
-        note = f"!! Nicio setare nu atinge tinta de {target}; am luat cea mai stricta."
+    best, note = ev.pick_threshold(t, target)
     return best, t, note
 
 

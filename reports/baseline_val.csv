@@ -1,5 +1,5 @@
 type,metoda,n,prinse,zile_mediane_pana_la_detectie,kWh_pierduti_pana_la_detectie,fa_la_1000_zile_casa
-partial,B1,10,60.0,29.5,346.3,1.45
-total,B1,10,100.0,6.0,48.9,1.45
+partial,B1,10,60.0,51.5,360.5,1.11
+total,B1,10,100.0,9.0,69.3,1.11
 partial,B2,10,30.0,18.0,314.0,1.62
 total,B2,10,70.0,6.0,759.1,1.62
