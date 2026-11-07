@@ -230,7 +230,6 @@ def main():
     out = PROC / f"decisions_{args.period}.csv"
     events.to_csv(out, index=False)
     print(f"\nSalvat: {out}")
-    fr = results[theta]["faults"]
     print(f"Defecte prinse cu CONTACTEAZA: {results[theta]['recall']:.0f}% | alarme CONTACT false pe case curate: "
           f"{results[theta]['fa']:.2f} la 1.000 zile-casa")
     print("Exemplu de explicatii:")

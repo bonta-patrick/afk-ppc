@@ -14,7 +14,6 @@ Rulare:   python src/split_and_check.py
 """
 from pathlib import Path
 import json
-import numpy as np
 import pandas as pd
 import matplotlib
 matplotlib.use("Agg")          # fara fereastra: salveaza direct in fisiere

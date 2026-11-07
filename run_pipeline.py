@@ -205,7 +205,8 @@ def main() -> None:
     steps = select(args)
     if not steps:
         raise SystemExit("Niciun pas selectat.")
-    runs_test = any(s.group == "test" for s in steps)
+    # garda priveste doar pasii care EVALUEAZA pe test (9a-9d); pasul 10 doar citeste rezultatele
+    runs_test = any(s.group == "test" and s.num != "10" for s in steps)
     trains_or_calibrates = any(s.group == "val" and s.num not in ("1", "2", "3a", "3b") for s in steps)
 
     if args.dry_run:

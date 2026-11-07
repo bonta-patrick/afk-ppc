@@ -366,10 +366,10 @@ def queue_result(name, K):
 
 # ================================================================== pagini
 def page_overview():
-    st.html(f'<p class="dm-lead">Un prosumator are un contor care vede doar <b>diferența</b> dintre ce ia din rețea și ce '
-            f'trimite în rețea. Când panourile se strică, nimeni nu observă: furnizorul vede doar un consum mai mare. '
-            f'Dar un consum mai mare poate fi și o piscină nouă, o mașină electrică sau munca de acasă. '
-            f'<b>Dimmer</b> le deosebește și spune echipei pe cine merită să verifice primul.</p>')
+    st.html('<p class="dm-lead">Un prosumator are un contor care vede doar <b>diferența</b> dintre ce ia din rețea și ce '
+            'trimite în rețea. Când panourile se strică, nimeni nu observă: furnizorul vede doar un consum mai mare. '
+            'Dar un consum mai mare poate fi și o piscină nouă, o mașină electrică sau munca de acasă. '
+            '<b>Dimmer</b> le deosebește și spune echipei pe cine merită să verifice primul.</p>')
 
     section("Cum lucrează agentul")
     steps = [("Ghicește normalul", "Un model LightGBM, antrenat pe un an, prezice contorul fiecărei case pe orele de zi, "

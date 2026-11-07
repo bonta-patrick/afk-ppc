@@ -13,7 +13,6 @@ from pathlib import Path
 import argparse
 import json
 import shutil
-import numpy as np
 import pandas as pd
 
 import evalkit as ev

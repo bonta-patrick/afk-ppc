@@ -17,6 +17,12 @@ def ro(x, d=1):
     return f"{x:.{d}f}".replace(".", ",")
 
 
+def zile(n):
+    """'14 zile', dar '28 de zile': in romana, 'de' apare cand ultimele doua cifre sunt 00 sau >= 20."""
+    r = n % 100
+    return f"{n} de zile" if r >= 20 or (r == 0 and n > 0) else f"{n} zile"
+
+
 def customer_message(row, econ=None, sender="Echipa de suport"):
     n_days = int(row.get("n_days", 28)) if pd.notna(row.get("n_days", np.nan)) else 28
     loss = row.get("est_pierdere_kwh_zi", np.nan)
@@ -31,10 +37,10 @@ def customer_message(row, econ=None, sender="Echipa de suport"):
 
     parts = ["Subiect: Producția panourilor dumneavoastră pare mai mică decât de obicei", "", "Bună ziua,", ""]
     if pd.notna(loss):
-        parts.append(f"Analizând datele contorului dumneavoastră din ultimele aproximativ {n_days} de zile, am observat că, în orele de zi, "
+        parts.append(f"Analizând datele contorului dumneavoastră din ultimele aproximativ {zile(n_days)}, am observat că, în orele de zi, "
                      f"luați din rețea cu circa {ro(loss)} kWh pe zi mai mult decât ne-am fi așteptat, {link}.")
     else:
-        parts.append(f"Analizând datele contorului dumneavoastră din ultimele aproximativ {n_days} de zile, am observat că, în orele de zi, "
+        parts.append(f"Analizând datele contorului dumneavoastră din ultimele aproximativ {zile(n_days)}, am observat că, în orele de zi, "
                      f"luați din rețea mai mult decât ne-am fi așteptat, {link}.")
     parts.append("Acesta poate fi un semn că panourile sau invertorul produc mai puțin decât ar trebui.")
     if econ and econ.get("price_per_kwh") and pd.notna(loss):
