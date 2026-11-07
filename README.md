@@ -212,8 +212,6 @@ Premisa se transferă: la prosumatori, contorul vede importul și exportul, nu p
 2. clientul cu panouri stricate vede doar o factură mai mare și sună la call center;
 3. un mesaj proactiv înseamnă client păstrat și, eventual, un serviciu de mentenanță.
 
-**TODO (autori):** verificați și descrieți cum sunt măsurați și compensați prosumatorii în România (surse oficiale: ANRE, operatorul de rețea) și cine are în responsabilitate contorul și verificările în teren.
-
 ## 10. Direcții de continuare
 
 - citiri separate de **export** și date de la invertor (ar elimina zgomotul consumului); temperatura (pentru aerul condiționat și zilele calde);
@@ -262,4 +260,4 @@ afk-ppc/
 
 **Date:** Ausgrid, CC BY (vezi secțiunea 5). Radiație: Open-Meteo (citați conform site-ului open-meteo.com).
 
-**Licența codului:** **TODO (autori):** alegeți o licență (de exemplu MIT) și adăugați fișierul `LICENSE`.
+**Licența codului:** MIT
