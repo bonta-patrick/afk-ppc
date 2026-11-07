@@ -60,14 +60,15 @@ pip install -r requirements.txt
 python -m streamlit run app/app.py
 ```
 
-Aplicația citește doar din `demo_data/test/` (inclus în repo, câțiva MB). Are cinci secțiuni: ce face Dimmer, un caz pe larg (cu butonul „Arată adevărul"), coada de verificări cu slider de capacitate, episoadele reale și tabelele de rezultate.
+Testat cu Python 3.14. Aplicația citește doar din `demo_data/test/` (inclus în repo, câțiva MB) și poate fi folosită în română sau engleză (selectorul RO / EN din dreapta sus). Are cinci secțiuni: ce face Dimmer, un caz pe larg (cu butonul „Arată adevărul"), coada de verificări cu slider de capacitate, episoadele reale și tabelele de rezultate.
 
 ### 4.2 Lanțul complet, de la date brute
 
-1. Puneți datele în `data/raw/` (secțiunea 5).
-2. Rulați:
+1. Puneți cele trei fișiere Ausgrid în `data/raw/` și descărcați radiația cu `python src/download_solar_radiation.py` (secțiunea 5).
+2. Rulați, din rădăcina repo-ului (de preferat într-un clone separat: lanțul rescrie `data/processed/`, `models/`, `reports/` și pragurile din `config/`):
 
 ```bash
+python run_pipeline.py --dry-run  # arată pașii și verifică fișierele, fără să ruleze nimic
 python run_pipeline.py            # până la validare (fără testul final)
 python run_pipeline.py --test     # adaugă testul final, rulat O SINGURĂ DATĂ
 ```
@@ -89,7 +90,7 @@ Antrenarea durează aproximativ 40 de secunde pe variantă pe laptopul autorilor
 | 9 | aceleași scripturi cu `--period test` | testul final (pragurile sunt înghețate, nu se modifică) |
 | 10 | `python src/make_demo_data.py --period test` | `demo_data/test/` pentru aplicație |
 
-Opțional: `python src/train_eval.py --period val --peer on` (ablația „ajustare față de vecini"), `python src/inspect_misses.py` (analiza erorilor pe SNR) și `python src/check_test.py` (verificări pe test, fără efect asupra rezultatelor).
+Opțional: `python src/train_eval.py --period val --peer on` (ablația „ajustare față de vecini"), `python src/inspect_misses.py` (analiza erorilor pe SNR), `python src/check_test.py` (verificări pe test, fără efect asupra rezultatelor), `python src/check_zero.py` (case cu producție aproape zero, pe luni) și `python src/inspect_raw.py` (primele rânduri din fiecare fișier brut).
 
 **Notă.** `config/faults.json` (creat automat) presupune cel puțin ~100 de case eligibile (10 defecte × 4 tipuri + 5 consumuri × 4 tipuri). Pentru un set mai mic, reduceți `n_per_type` și `n_load_per_type`.
 
@@ -98,7 +99,7 @@ Dacă `streamlit` nu e recunoscut în PowerShell, folosiți `python -m streamlit
 ## 5. Date
 
 - **Consum și producție:** *Ausgrid Solar Home Electricity Data* (Sydney, 300 case cu panouri, citiri la 30 de minute, 2010-07-01 → 2013-06-30; canale GC consum, GG producție, CL circuit controlat). Licență Creative Commons Attribution. Descărcările oficiale au fost retrase de pe site-ul Ausgrid; am folosit copia publicată de Pierre Haessig (<https://pierreh.eu/downloads/Ausgrid_solar_home_data.zip>, linkată din <https://github.com/pierre-haessig/ausgrid-solar-data>). Fișierele folosite: `Solar home 2010-2011.csv`, `Solar home 2011-2012.csv`, `Solar home 2012-2013.csv`.
-- **Radiație solară:** Open-Meteo, API-ul istoric, radiație pe unde scurte, orară, Sydney, 2010-2013, în `data/raw/sydney_shortwave_radiation_2010-2013.csv`. **TODO (autori):** completați coordonatele exacte, fusul orar și parametrii cererii.
+- **Radiație solară:** Open-Meteo, API-ul istoric (`https://archive-api.open-meteo.com/v1/archive`), variabila `shortwave_radiation` (W/m², medie pe ora precedentă), orară, pentru centrul Sydney (latitudine −33,8688, longitudine 151,2093), fus orar `Australia/Sydney`, 2010-01-01 → 2013-12-31. Se descarcă cu `python src/download_solar_radiation.py` în `data/raw/sydney_shortwave_radiation_2010-2013.csv`.
 - **Datele brute nu sunt în repo** (`data/` și `models/` sunt în `.gitignore`).
 
 Citare: E. L. Ratnam, S. R. Weller, C. M. Kellett, A. T. Murray, „Residential load and rooftop PV generation: an Australian distribution network dataset", *International Journal of Sustainable Energy*, 2017, DOI 10.1080/14786451.2015.1100196.
@@ -239,9 +240,11 @@ Premisa se transferă: la prosumatori, contorul vede importul și exportul, nu p
 ```
 afk-ppc/
   README.md
+  LICENSE                # MIT
   requirements.txt
   run_pipeline.py        # rulează tot lanțul
-  app/app.py             # aplicația demo (Streamlit)
+  app/app.py             # aplicația demo (Streamlit, RO / EN)
+  app/.streamlit/        # tema aplicației
   demo_data/test/        # date mici pentru aplicație (în repo)
   config/                # praguri înghețate, scenarii de defecte, împărțirea în timp, economics.json
   reports/               # rezultate (validare și test)
@@ -256,9 +259,10 @@ afk-ppc/
     triage.py            # coada cu capacitate
     evalkit.py           # metrici comune
     inspect_misses.py    # analiza erorilor pe SNR
-    messages.py          # ciorna mesajului către client
-    fix_encoding.py      # reports/*.txt din UTF-16 în UTF-8
+    messages.py          # ciorna mesajului către client (RO / EN)
     make_demo_data.py    # pregătește demo_data/
+    download_solar_radiation.py  # descarcă radiația de la Open-Meteo
+    check_test.py, check_zero.py, inspect_raw.py  # verificări ajutătoare
   data/  models/         # generate local, nu sunt în repo
 ```
 
@@ -275,4 +279,4 @@ afk-ppc/
 
 **Date:** Ausgrid, CC BY (vezi secțiunea 5). Radiație: Open-Meteo (citați conform site-ului open-meteo.com).
 
-**Licența codului:** MIT
+**Licența codului:** MIT, vezi [LICENSE](LICENSE). Licența acoperă codul; datele Ausgrid și Open-Meteo își păstrează licențele proprii.
