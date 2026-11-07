@@ -26,14 +26,25 @@ GG: valori negative = 0 -> transformate in lipsa
 GC: ore cu consum > 20.0 kWh = 0 (doar raportat)
 GG: ore cu productie > 1.5 x capacitate = 7 (doar raportat)
 GG noaptea (22-04): maxim = 1.873 kWh; ore cu > 0.05 kWh = 449  (trebuie sa fie ~0)
+<<<<<<< HEAD
 
 == 6. ALEGEREA CASELOR ==
 Case pastrate: 299 din 300
   eliminate pt >5% lipsa GC: 1, GG: 1, fara productie in anul de antrenare: 0
+=======
+  = 0.0228% din orele de noapte; casele cu cele mai multe: 97: 273, 146: 176, 3: 0, 4: 0, 5: 0
+  zile distincte afectate: 99
+
+== 6. ALEGEREA CASELOR ==
+Case pastrate: 297 din 300
+  eliminate pt >5% lipsa GC: 1, GG: 1, fara productie in anul de antrenare: 0, cu >24 ore de productie noaptea: 2 ([97, 146])
+Ore izolate de productie noaptea ramase la casele pastrate: 0 -> transformate in lipsa
+>>>>>>> fe660df (Added splits and graphics to visualize data better)
 Lipsa medie dupa filtrare: GC 0.00%, GG 0.00%
 
 == 7. RADIATIA SI ALINIEREA ==
 Radiatie: 2010-01-01 00:00:00 .. 2013-12-31 23:00:00, pasi: {Timedelta('0 days 01:00:00'): 35063}, lipsa: 0
+<<<<<<< HEAD
 Cele mai bune decalaje (k ore => aligned[S] = rad[S+k]) si corelatia:
   k=+1: corr=0.9407
   k=+2: corr=0.9347
@@ -83,3 +94,17 @@ Decalaj ales: k=+1
   salvat customers.parquet  (299, 2)
   salvat hidden_gc_hourly.parquet  (26304, 299)
   salvat hidden_gg_hourly.parquet  (26304, 299)
+=======
+Zile cu ora de vara in Sydney: 50% din ore
+ORA DE VARA (oct-apr): cel mai bun k=+1; primele 3: k=+1 corr=0.9613, k=+0 corr=0.9152, k=+2 corr=0.9133
+ORA STANDARD (apr-oct): cel mai bun k=+2; primele 3: k=+2 corr=0.9755, k=+1 corr=0.9156, k=+3 corr=0.9131
+!! Decalajul difera intre ora de vara (k=+1) si standard (k=+2): cele doua fisiere nu folosesc aceeasi regula de fus orar. Corectam separat pe cele doua regimuri.
+Dupa aliniere: corelatie globala = 0.9634; cea mai slaba luna = 0.9412
+
+== 8. NET SI SALVARE ==
+  salvat net_hourly.parquet  (26304, 297)
+  salvat radiation_hourly.parquet  (26304, 1)
+  salvat customers.parquet  (297, 2)
+  salvat hidden_gc_hourly.parquet  (26304, 297)
+  salvat hidden_gg_hourly.parquet  (26304, 297)
+>>>>>>> fe660df (Added splits and graphics to visualize data better)

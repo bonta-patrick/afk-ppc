@@ -24,6 +24,9 @@ START, END = "2010-07-01", "2013-06-30"   # perioada asteptata a datelor
 MAX_MISSING = 0.05          # eliminam casele cu >5% valori lipsa (GC sau GG)
 MAX_GC_KWH_PER_HOUR = 20.0  # prag pentru "consum absurd" (doar raportat)
 MAX_GG_OVER_CAPACITY = 1.5  # productie orara > 1.5 x capacitate (doar raportat)
+NIGHT_HOURS = [22, 23, 0, 1, 2, 3]   # ore in care productia solara trebuie sa fie ~0
+NIGHT_KWH = 0.05            # peste acest prag noaptea = suspect
+NIGHT_BAD_MAX = 24          # casa cu mai mult de atatea ore suspecte noaptea e eliminata
 TRAIN_END = "2011-06-30 23:00"   # anul de antrenare: 2010-11
 SHIFT_RANGE = range(-12, 13)     # decalaje orare testate pentru radiatie
 DATE_FORMATS = ["%d-%b-%y", "%d/%m/%Y"]  # 1-Jul-10  si  1/07/2011
@@ -92,18 +95,25 @@ def to_wide(rows, channel):
     return wide.sort_index().sort_index(axis=1)
 
 
-def find_radiation_shift(gg_mean, rad):
-    """aligned[S] = rad[S + k ore]. Alege k cu corelatia maxima cu productia medie."""
+def sydney_dst_flag(idx):
+    """True pentru orele din zilele cu ora de vara in Sydney (decis la amiaza zilei)."""
+    days = idx.normalize().unique()
+    noon = (days + pd.Timedelta(hours=12)).tz_localize("Australia/Sydney")
+    flag = pd.Series([t.dst() != pd.Timedelta(0) for t in noon], index=days)
+    return flag.reindex(idx.normalize()).to_numpy()
+
+
+def shifted_radiation(gg_mean, rad):
+    """shifted[k][S] = rad[S + k ore], pentru fiecare k testat."""
     idx = gg_mean.index
-    shifted = {k: pd.Series(rad.reindex(idx + pd.Timedelta(hours=k)).to_numpy(), index=idx)
-               for k in SHIFT_RANGE}
-    overall = {k: gg_mean.corr(s) for k, s in shifted.items()}
-    best = max(overall, key=overall.get)
-    per_month = {}
-    for (y, m), grp in gg_mean.groupby([idx.year, idx.month]):
-        c = {k: grp.corr(shifted[k].loc[grp.index]) for k in SHIFT_RANGE}
-        per_month[(y, m)] = max(c, key=c.get)
-    return best, overall, per_month, shifted
+    return {k: pd.Series(rad.reindex(idx + pd.Timedelta(hours=k)).to_numpy(), index=idx)
+            for k in SHIFT_RANGE}
+
+
+def best_shift(gg_mean, shifted, mask):
+    c = {k: gg_mean[mask].corr(shifted[k][mask]) for k in SHIFT_RANGE}
+    ranked = sorted(c, key=c.get, reverse=True)
+    return ranked[0], c, ranked
 
 
 def save(df, name):
@@ -169,19 +179,35 @@ def main():
     cap = cust.loc[homes, "capacity_kw"].astype(float)
     over = int((gg.div(cap, axis=1) > MAX_GG_OVER_CAPACITY).sum().sum())
     log(f"GG: ore cu productie > {MAX_GG_OVER_CAPACITY} x capacitate = {over} (doar raportat)")
-    night = gg[gg.index.hour.isin([22, 23, 0, 1, 2, 3])]
+    night = gg[gg.index.hour.isin(NIGHT_HOURS)]
     log(f"GG noaptea (22-04): maxim = {np.nanmax(night.to_numpy()):.3f} kWh; "
         f"ore cu > 0.05 kWh = {int((night > 0.05).sum().sum())}  (trebuie sa fie ~0)")
+    bad_night = (night > NIGHT_KWH)
+    night_bad_by_home = bad_night.sum()
+    n_bad = int(night_bad_by_home.sum())
+    if n_bad:
+        top = bad_night.sum().sort_values(ascending=False).head(5)
+        log(f"  = {n_bad / night.notna().sum().sum():.4%} din orele de noapte; casele cu cele mai multe: "
+            + ", ".join(f"{h}: {int(n)}" for h, n in top.items()))
+        days_bad = bad_night.any(axis=1)
+        log(f"  zile distincte afectate: {days_bad[days_bad].index.normalize().nunique()}")
 
     log("\n== 6. ALEGEREA CASELOR ==")
     miss_gc, miss_gg = gc.isna().mean(), gg.isna().mean()
     train_gg_sum = gg.loc[:TRAIN_END].sum()
-    ok = (miss_gc <= MAX_MISSING) & (miss_gg <= MAX_MISSING) & (train_gg_sum > 0)
+    night_bad = night_bad_by_home.reindex(gg.columns).fillna(0)
+    ok = (miss_gc <= MAX_MISSING) & (miss_gg <= MAX_MISSING) & (train_gg_sum > 0) & (night_bad <= NIGHT_BAD_MAX)
     log(f"Case pastrate: {int(ok.sum())} din {len(ok)}")
     log(f"  eliminate pt >{MAX_MISSING:.0%} lipsa GC: {int((miss_gc > MAX_MISSING).sum())}, "
-        f"GG: {int((miss_gg > MAX_MISSING).sum())}, fara productie in anul de antrenare: {int((train_gg_sum <= 0).sum())}")
+        f"GG: {int((miss_gg > MAX_MISSING).sum())}, fara productie in anul de antrenare: {int((train_gg_sum <= 0).sum())}, "
+        f"cu >{NIGHT_BAD_MAX} ore de productie noaptea: {int((night_bad > NIGHT_BAD_MAX).sum())} "
+        f"({[int(h) for h in night_bad[night_bad > NIGHT_BAD_MAX].index]})")
     keep = ok[ok].index.tolist()
     gc, gg, cust = gc[keep], gg[keep], cust.loc[keep]
+    nm = gg.index.hour.isin(NIGHT_HOURS)
+    resid = gg.loc[nm] > NIGHT_KWH
+    log(f"Ore izolate de productie noaptea ramase la casele pastrate: {int(resid.sum().sum())} -> transformate in lipsa")
+    gg.loc[nm] = gg.loc[nm].mask(resid)
     log(f"Lipsa medie dupa filtrare: GC {gc.isna().mean().mean():.2%}, GG {gg.isna().mean().mean():.2%}")
 
     log("\n== 7. RADIATIA SI ALINIEREA ==")
@@ -189,21 +215,28 @@ def main():
     steps = rad.index.to_series().diff().dropna().value_counts()
     log(f"Radiatie: {rad.index.min()} .. {rad.index.max()}, pasi: {steps.to_dict()}, lipsa: {int(rad.isna().sum())}")
     gg_mean = gg.mean(axis=1)
-    best, overall, per_month, shifted = find_radiation_shift(gg_mean, rad)
-    top = sorted(overall, key=overall.get, reverse=True)[:3]
-    log("Cele mai bune decalaje (k ore => aligned[S] = rad[S+k]) si corelatia:")
-    for k in top:
-        log(f"  k={k:+d}: corr={overall[k]:.4f}")
-    month_shifts = sorted(set(per_month.values()))
-    log(f"Decalaj ales: k={best:+d}")
-    if len(month_shifts) > 1:
-        log(f"!! ATENTIE: decalajul optim difera de la o luna la alta: {month_shifts}. "
-            f"Probabil ora de vara. Trimiteti-mi tabelul de mai jos.")
-        for (y, m), k in per_month.items():
-            log(f"   {y}-{m:02d}: k={k:+d}")
-    else:
-        log("Decalajul e acelasi in toate lunile (nu se vede efect de ora de vara).")
-    rad_aligned = shifted[best].rename("radiation_wm2").to_frame()
+    shifted = shifted_radiation(gg_mean, rad)
+    dst = sydney_dst_flag(gg_mean.index)
+    log(f"Zile cu ora de vara in Sydney: {dst.mean():.0%} din ore")
+    chosen = {}
+    for name, mask in (("ORA DE VARA (oct-apr)", dst), ("ORA STANDARD (apr-oct)", ~dst)):
+        k, c, ranked = best_shift(gg_mean, shifted, mask)
+        chosen[name] = k
+        log(f"{name}: cel mai bun k={k:+d}; primele 3: " +
+            ", ".join(f"k={r:+d} corr={c[r]:.4f}" for r in ranked[:3]))
+        if abs(c[ranked[0]] - c[ranked[1]]) < 0.01 and abs(ranked[0] - ranked[1]) == 1:
+            log("   !! doua decalaje vecine au corelatie aproape egala -> posibil decalaj de o JUMATATE de ora "
+                "(conventia etichetelor 0:30/1:00). Trimiteti-mi aceasta linie.")
+    k_dst, k_std = list(chosen.values())
+    if k_dst != k_std:
+        log(f"!! Decalajul difera intre ora de vara (k={k_dst:+d}) si standard (k={k_std:+d}): "
+            f"cele doua fisiere nu folosesc aceeasi regula de fus orar. Corectam separat pe cele doua regimuri.")
+    aligned = np.where(dst, shifted[k_dst].to_numpy(), shifted[k_std].to_numpy())
+    rad_aligned = pd.Series(aligned, index=gg_mean.index, name="radiation_wm2").to_frame()
+    mm = pd.concat([gg_mean.rename("gg"), rad_aligned["radiation_wm2"]], axis=1)
+    per_month = mm.groupby([mm.index.year, mm.index.month]).apply(lambda g: g["gg"].corr(g["radiation_wm2"]))
+    log(f"Dupa aliniere: corelatie globala = {gg_mean.corr(rad_aligned['radiation_wm2']):.4f}; "
+        f"cea mai slaba luna = {per_month.min():.4f}")
 
     log("\n== 8. NET SI SALVARE ==")
     net = gc - gg      # ce ar vedea un contor net; DOAR asta primeste modelul
