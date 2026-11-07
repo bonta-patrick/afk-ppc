@@ -1,0 +1,7 @@
+{
+  "target_fa_per_1000": 2.0,
+  "b1_N": 7,
+  "b2_h": 2.0,
+  "b2_window_days": 7,
+  "min_export_rate": 0.25
+}
