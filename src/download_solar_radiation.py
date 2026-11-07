@@ -1,8 +1,3 @@
-"""Descarcă radiația solară istorică (shortwave_radiation) pentru Sydney, 2010–2013,
-de pe Open-Meteo Historical Weather API și o salvează în data/raw/.
-
-Rulare:  .venv/bin/python src/download_solar_radiation.py
-"""
 
 from pathlib import Path
 

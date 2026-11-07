@@ -1,0 +1,85 @@
+== 1. CITIRE SI ORAR ==
+Citesc Solar home 2010-2011.csv
+  format data: %d-%b-%y
+  randuri: 269735, celule goale: 0, celule ne-numerice transformate in lipsa: 0
+Citesc Solar home 2011-2012.csv
+  format data: %d/%m/%Y
+  randuri: 270304, celule goale: 0, celule ne-numerice transformate in lipsa: 0
+Citesc Solar home 2012-2013.csv
+  format data: %d/%m/%Y
+  randuri: 268557, celule goale: 0, celule ne-numerice transformate in lipsa: 0
+Total randuri: 808596; categorii: {'GC': 328719, 'GG': 328719, 'CL': 151158}
+Perioada gasita: 2010-07-01 .. 2013-06-30
+
+== 2. DUPLICATE ==
+Randuri implicate in duplicate (casa, categorie, zi): 0
+
+== 3. CASE: capacitate si cod postal ==
+Case distincte: 300; cu capacitate inconsistenta: 0; cu cod postal inconsistent: 0
+
+== 4. TABELE ORARE (GC=consum, GG=productie; CL ignorat) ==
+Case cu ambele canale GC si GG: 300
+
+== 5. VERIFICARI DE BUN-SIMT ==
+GC: valori negative = 0 -> transformate in lipsa
+GG: valori negative = 0 -> transformate in lipsa
+GC: ore cu consum > 20.0 kWh = 0 (doar raportat)
+GG: ore cu productie > 1.5 x capacitate = 7 (doar raportat)
+GG noaptea (22-04): maxim = 1.873 kWh; ore cu > 0.05 kWh = 449  (trebuie sa fie ~0)
+
+== 6. ALEGEREA CASELOR ==
+Case pastrate: 299 din 300
+  eliminate pt >5% lipsa GC: 1, GG: 1, fara productie in anul de antrenare: 0
+Lipsa medie dupa filtrare: GC 0.00%, GG 0.00%
+
+== 7. RADIATIA SI ALINIEREA ==
+Radiatie: 2010-01-01 00:00:00 .. 2013-12-31 23:00:00, pasi: {Timedelta('0 days 01:00:00'): 35063}, lipsa: 0
+Cele mai bune decalaje (k ore => aligned[S] = rad[S+k]) si corelatia:
+  k=+1: corr=0.9407
+  k=+2: corr=0.9347
+  k=+0: corr=0.8503
+Decalaj ales: k=+1
+!! ATENTIE: decalajul optim difera de la o luna la alta: [1, 2]. Probabil ora de vara. Trimiteti-mi tabelul de mai jos.
+   2010-07: k=+2
+   2010-08: k=+2
+   2010-09: k=+2
+   2010-10: k=+1
+   2010-11: k=+1
+   2010-12: k=+1
+   2011-01: k=+1
+   2011-02: k=+1
+   2011-03: k=+1
+   2011-04: k=+2
+   2011-05: k=+2
+   2011-06: k=+2
+   2011-07: k=+2
+   2011-08: k=+2
+   2011-09: k=+2
+   2011-10: k=+1
+   2011-11: k=+1
+   2011-12: k=+1
+   2012-01: k=+1
+   2012-02: k=+1
+   2012-03: k=+1
+   2012-04: k=+2
+   2012-05: k=+2
+   2012-06: k=+2
+   2012-07: k=+2
+   2012-08: k=+2
+   2012-09: k=+2
+   2012-10: k=+1
+   2012-11: k=+1
+   2012-12: k=+1
+   2013-01: k=+1
+   2013-02: k=+1
+   2013-03: k=+1
+   2013-04: k=+2
+   2013-05: k=+2
+   2013-06: k=+2
+
+== 8. NET SI SALVARE ==
+  salvat net_hourly.parquet  (26304, 299)
+  salvat radiation_hourly.parquet  (26304, 1)
+  salvat customers.parquet  (299, 2)
+  salvat hidden_gc_hourly.parquet  (26304, 299)
+  salvat hidden_gg_hourly.parquet  (26304, 299)
