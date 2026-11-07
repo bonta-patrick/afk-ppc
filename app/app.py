@@ -18,6 +18,7 @@ import streamlit as st
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 from triage import run_queue, metrics  # noqa: E402
+from messages import customer_message  # noqa: E402
 
 DEMO = ROOT / "demo_data" / "test"
 st.set_page_config(page_title="Dimmer", page_icon="☀️", layout="wide")
@@ -53,6 +54,11 @@ def load():
          "meta": json.loads((d / "meta.json").read_text(encoding="utf-8"))}
     return D
 
+
+ECON_PATH = DEMO / "economics.json"
+ECON = (json.loads(ECON_PATH.read_text(encoding="utf-8")) if ECON_PATH.exists()
+        else {"currency": "RON", "price_per_kwh": 1.30, "visit_cost": 100.0,
+              "price_source": "valoare implicită; completați config/economics.json", "visit_cost_note": "ipoteză"})
 
 D = load()
 meta, labels, dec = D["meta"], D["labels"], D["dec"]
@@ -130,13 +136,28 @@ Dar un consum mai mare poate însemna și o piscină nouă, o mașină electric�
     c1.success("🔴 **CONTACTEAZĂ**\n\nGolul urmărește soarele: probabil lipsește producția solară.")
     c2.warning("🟠 **MONITORIZEAZĂ**\n\nGolul nu urmărește soarele (probabil consum nou) sau nu putem spune încă. Nu trimitem pe nimeni.")
     c3.info("⚪ **VERIFICĂ DATELE**\n\nPrea puține zile sau prea multe citiri lipsă.")
-    st.markdown("#### Pe scurt, rezultatele pe testul final")
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Eroarea de predicție", "−19%", "față de istoricul casei", delta_color="off")
-    m2.metric("Defecte simulate prinse", "78%", "B1: 43% · B2: 55%", delta_color="off")
-    m3.metric("Vizite false (CONTACT)", "1,00", "față de 2,12 fără verificare", delta_color="off")
-    m4.metric("Piscină luată drept defect", "40%", "față de 100% fără verificare", delta_color="off")
-    st.caption("Cifre din testul final (a se vedea secțiunea 5 pentru tabele și limite). Alarmele false la 1.000 zile-casă: model 2,12 · B1 1,40 · B2 2,00.")
+    st.markdown("#### Testul final: aceeași comparație, la același nivel de vizite false")
+    ca, cb, cc = st.columns(3)
+    ca.markdown("**B1** · regulă simplă")
+    ca.metric("Defecte simulate prinse", "42,5%")
+    ca.metric("Alarme false la 1.000 zile-casă", "1,40")
+    ca.metric("kWh pierduți pe defect", "295")
+    cb.markdown("**B2** · față de anul trecut")
+    cb.metric("Defecte simulate prinse", "55%")
+    cb.metric("Alarme false la 1.000 zile-casă", "2,00")
+    cb.metric("kWh pierduți pe defect", "257")
+    cc.markdown("**Dimmer** · model + verificare soare/consum")
+    cc.metric("Defecte simulate prinse", "62%")
+    cc.metric("Alarme false la 1.000 zile-casă", "1,00")
+    cc.metric("kWh pierduți pe defect", "223")
+    st.caption("Pentru Dimmer, o alarmă falsă este o alarmă CONTACTEAZĂ pe o casă curată, adică o vizită irosită; pentru B1 și B2, orice alarmă duce la o vizită. "
+               "Pe test, Dimmer prinde mai mult, cu mai puține vizite false și mai puțină energie pierdută. "
+               "Pe validare, la același procent de defecte prinse ca B1 (80%), Dimmer a făcut jumătate din vizitele false (0,57 față de 1,11), cu ~11% mai mulți kWh pierduți. "
+               "Fără verificarea soare/consum, modelul e mai sensibil (78% prinse), dar la 2,12 alarme false la 1.000.")
+    d1, d2 = st.columns(2)
+    d1.metric("Eroarea de predicție", "−19%", "față de istoricul casei", delta_color="off")
+    d2.metric("Piscină luată drept defect", "40%", "față de 100% fără verificare", delta_color="off")
+    st.caption("Cifre din testul final (secțiunea 5 are tabelele și limitele). Defectele sunt simulate, câte 10 pe tip.")
     st.warning("**Ce nu pretindem.** Defectele sunt simulate pe date reale; nu am confirmat defecte fizice. "
                "Nu detectăm mai repede defectele totale decât o regulă simplă (22,5 zile față de 9), "
                "iar aerul condiționat rămâne confundat cu un defect. Datele sunt din Australia; metoda se transferă, cifrele nu.")
@@ -153,6 +174,9 @@ elif page == PAGES[1]:
     left, right = st.columns([1, 3])
     cat = left.radio("Tipul casei", list(cats))
     options = cats[cat]
+    if not options:
+        st.info("Nu există case în această categorie în datele curente.")
+        st.stop()
     h = left.selectbox("Casa", options, format_func=lambda x: home_label(x) + (f" · {int(n_al.get(x, 0))} alarme" if cat == "Casă curată" else ""))
     truth = left.checkbox("🔍 Arată adevărul (ascuns pentru sistem)")
     ev_h = dec[dec["home"] == h].sort_values("date")
@@ -211,6 +235,14 @@ elif page == PAGES[1]:
             st.caption(f"Sunt afișate ultimele 6 din {len(ev_h)} alarme.")
     else:
         st.success("Nicio alarmă în perioada de test.")
+    contact_h = ev_h[ev_h["action"] == "CONTACTEAZA"]
+    if len(contact_h):
+        with st.expander("✉️ Mesajul către client (ciornă, pentru ultima alarmă CONTACTEAZĂ)", expanded=True):
+            st.code(customer_message(contact_h.iloc[-1], ECON), language=None)
+            st.caption("Șablon de adaptat și de aprobat de un operator uman; sistemul nu trimite nimic singur. "
+                       "Mesajul nu afirmă că panourile sunt defecte (nu putem ști de la distanță).")
+    else:
+        st.caption("Pentru această casă nu pleacă niciun mesaj către client: nicio alarmă de tip CONTACTEAZĂ.")
 
 # ================================================================== 3
 elif page == PAGES[2]:
@@ -230,10 +262,22 @@ elif page == PAGES[2]:
             rows.append({"Politică": n, "Defecte reparate (%)": m["defecte_reparate%"],
                          "kWh pierduți pe defect (medie)": m["kWh_pierduti_pe_defect"],
                          "kWh pierduți pe defect (mediană)": m["kWh_mediana_pe_defect"],
-                         "Vizite irosite": m["irosite"], "Defecte găsite": m["gasite"],
+                         "Vizite totale": m["vizite_total"], "Vizite irosite": m["irosite"], "Defecte găsite": m["gasite"],
                          "Precizia vizitelor (%)": m["precizie%"],
                          "Zile mediane până la reparație": m["zile_mediane_pana_la_reparatie"]})
         st.dataframe(pd.DataFrame(rows).set_index("Politică"))
+        n_f = D["lost"].shape[1]
+        st.markdown("#### Cost, cu ipoteze pe care le puteți modifica")
+        k1, k2 = st.columns(2)
+        price = k1.number_input("Prețul energiei (lei/kWh)", min_value=0.0, max_value=10.0, value=float(ECON["price_per_kwh"]), step=0.05)
+        visit = k2.number_input("Costul unei vizite (lei)", min_value=0.0, max_value=5000.0, value=float(ECON["visit_cost"]), step=10.0)
+        cost = pd.DataFrame([{"Politică": r["Politică"],
+                              "Energie pierdută (lei)": round(r["kWh pierduți pe defect (medie)"] * n_f * price),
+                              "Vizite (lei)": round(r["Vizite totale"] * visit)} for r in rows]).set_index("Politică")
+        cost["Cost total (lei)"] = cost["Energie pierdută (lei)"] + cost["Vizite (lei)"]
+        st.dataframe(cost)
+        st.caption(f"Preț: {ECON.get('price_source', '')} {ECON.get('price_note', '')} "
+                   f"Cost vizită: {ECON.get('visit_cost_note', '')}")
         fig, ax = plt.subplots(figsize=(11, 3.8))
         none = D["lost"].cumsum().sum(axis=1)
         ax.plot(none.index, none, color="#9ca3af", ls="--", label="fără nicio verificare")
@@ -260,6 +304,9 @@ elif page == PAGES[3]:
     st.markdown("Pe lângă defectele simulate, datele conțin case a căror producție **a scăzut real**. "
                 "Nu știm de ce (defect, umbră, panou scos), deci le numim *episoade probabile*. Lista s-a stabilit după o regulă fixă "
                 "(randamentul din perioadă sub 70% din cel din anul de antrenare), nu după rezultatele vreunui model, iar casele nu au primit defecte simulate.")
+    if not real_homes:
+        st.info("Nu există case cu scădere reală în datele curente.")
+        st.stop()
     b1, b2 = D["b1"], D["b2"]
     first = lambda df, h: df.loc[df["home"] == h, "date"].min()
     rows = []
@@ -294,6 +341,12 @@ elif page == PAGES[3]:
 else:
     st.header("Rezultatele, cinstit")
     st.markdown("Toate pragurile au fost alese pe anul de validare și **înghețate** înainte de testul final, rulat o singură dată.")
+    st.subheader("0. Comparația principală (test, la același nivel de vizite false)")
+    st.dataframe(pd.DataFrame({"B1": {"Defecte simulate prinse": "42,5%", "Alarme false la 1.000 zile-casă": "1,40", "kWh pierduți pe defect": "295"},
+                               "B2": {"Defecte simulate prinse": "55%", "Alarme false la 1.000 zile-casă": "2,00", "kWh pierduți pe defect": "257"},
+                               "Dimmer (model + verificare)": {"Defecte simulate prinse": "62%", "Alarme false la 1.000 zile-casă": "1,00", "kWh pierduți pe defect": "223"},
+                               "Dimmer fără verificare": {"Defecte simulate prinse": "77,5%", "Alarme false la 1.000 zile-casă": "2,12", "kWh pierduți pe defect": "162"}}))
+    st.caption("Ultima coloană este un alt punct de funcționare: mai sensibil, dar cu mai multe vizite false; nu o comparați direct cu B1.")
     st.subheader("1. Predicția")
     st.dataframe(pd.DataFrame({"Eroare medie (kWh/oră)": {"Baseline: media casei la aceeași oră și lună": "0,5030 / 0,5124",
                                                            "Model LightGBM (radiație + vecini)": "0,4104 / 0,4162",
@@ -322,7 +375,7 @@ else:
                 r["Dimmer: zile"] = m.loc["full", f"{typ}_zile"]
             rows.append(r)
         st.dataframe(pd.DataFrame(rows).set_index("Tip defect"))
-    st.caption("Alarme false la 1.000 zile-casă: B1 1,40 · B2 2,00 · Dimmer 2,12 (peste ținta de 2,0). "
+    st.caption("Alarme false la 1.000 zile-casă: B1 1,40 · B2 2,00 · Dimmer fără verificare 2,12 (peste ținta de 2,0). "
                "Pe validare, detecția era la paritate cu B1; pe test e mai bună, dar cu 10 defecte pe tip o parte din diferență poate fi întâmplare.")
     st.subheader("3. Stratul de decizie (soare sau consum?)")
     st.dataframe(pd.DataFrame({"Fără verificare": {"Alarme CONTACT false la 1.000": "2,12", "Defecte prinse": "78%", "kWh pierduți (medie)": "162",

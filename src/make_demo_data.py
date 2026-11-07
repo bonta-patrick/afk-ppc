@@ -74,6 +74,8 @@ def main():
             shutil.copy(REPORTS / f, out / f)
         else:
             print(f"(lipseste {REPORTS / f}, nu l-am copiat)")
+    if (CFG / "economics.json").exists():
+        shutil.copy(CFG / "economics.json", out / "economics.json")
     meta = {"period": period, "start": str(net_day.index.min().date()), "end": str(net_day.index.max().date()),
             "clean": clean, "real": real, "thresholds": {"baseline": thr}}
     (out / "meta.json").write_text(json.dumps(meta), encoding="utf-8")

@@ -2,7 +2,7 @@
 
 > Un agent care găsește panourile solare stricate „pe tăcute" doar din citirile contorului net și decide **cine merită verificat primul**, fără să trimită tehnicieni degeaba.
 
-**English summary.** Rooftop-solar customers have a net meter: the supplier sees only import minus export, so a failed panel looks like "the customer uses more power". Dimmer (1) predicts each home's expected net reading with a LightGBM model trained on one clean year, (2) accumulates evidence over days with CUSUM, (3) checks whether the gap *grows with the sun* (a missing panel) or is roughly constant (a new load such as a pool pump), and (4) ranks the resulting cases under a weekly inspection capacity. Everything is evaluated on a held-out year, run once with frozen thresholds, on real data with **simulated** faults. Detection is better than simple rules on harder fault types at a somewhat higher false-alarm rate; the main value is triage. Limitations are listed in section 8.
+**English summary.** Rooftop-solar customers have a net meter: the supplier sees only import minus export, so a failed panel looks like "the customer uses more power". Dimmer (1) predicts each home's expected net reading with a LightGBM model trained on one clean year, (2) accumulates evidence over days with CUSUM, (3) checks whether the gap *grows with the sun* (a missing panel) or is roughly constant (a new load such as a pool pump), and (4) ranks the resulting cases under a weekly inspection capacity. Everything is evaluated on a held-out year, run once with frozen thresholds, on real data with **simulated** faults. On the test year, model + decision catches 62% of simulated faults at 1.00 false dispatches per 1,000 home-days, versus 42.5% at 1.40 for the best simple rule (B1); on validation it matched B1's recall at half the false dispatches. The main value is triage. Limitations are listed in section 8.
 
 ---
 
@@ -28,17 +28,28 @@ Sistemul **nu** pretinde că dovedește un defect fizic. Spune „merită verifi
 
 ## 3. Rezultate pe scurt (testul final, 2012-07 → 2013-06)
 
+**Comparația principală, la același nivel de vizite false.** Pentru Dimmer, o „alarmă falsă" este o alarmă CONTACTEAZĂ pe o casă curată (o vizită irosită); pentru B1 și B2, orice alarmă duce la o vizită.
+
+| | B1 | B2 | **Dimmer** (model + verificare) |
+|---|---|---|---|
+| Defecte simulate prinse (medie pe 4 tipuri) | 42,5% | 55% | **62%** |
+| Alarme false la 1.000 zile-casă | 1,40 | 2,00 | **1,00** |
+| kWh pierduți pe defect (medie) | 295 | 257 | **223** |
+
+Pe test, Dimmer prinde mai mult, cu mai puține vizite false și mai puțină energie pierdută. Pe **validare**, la același procent de defecte prinse ca B1 (80%), Dimmer a făcut jumătate din vizitele false (0,57 față de 1,11), cu ~11% mai mulți kWh pierduți (239 față de 215). Cu 10 defecte pe tip, diferențele mici nu sunt concludente.
+
+Fără verificarea soare/consum, modelul funcționează la alt punct: **77,5%** defecte prinse la **2,12** alarme false la 1.000 (peste ținta de 2,0). Nu se compară direct cu B1 (1,40).
+
+**Alte rezultate:**
+
 | | Valoare |
 |---|---|
 | Eroarea de predicție (MAE) față de baseline-ul „media casei la aceeași oră și lună" | **−18,8%** (0,4162 față de 0,5124); pe validare −18,4% |
-| Defecte simulate prinse (medie pe 4 tipuri) | Dimmer **77,5%** · B1 42,5% · B2 55% |
-| Alarme false la 1.000 zile-casă | Dimmer 2,12 · B1 1,40 · B2 2,00 (ținta era ≤ 2,0) |
-| Stratul de decizie: alarme CONTACT false la 1.000 | 2,12 → **1,00** (dar defectele prinse 78% → 62%) |
-| Piscină / muncă de acasă luate drept defect | 100% → **40%** / 80% → **20%** (aerul condiționat rămâne 60%) |
+| Piscină / muncă de acasă luate drept defect (efectul verificării) | 100% → **40%** / 80% → **20%** (aerul condiționat rămâne 60%) |
 | Episoade reale de scădere a producției (12 case) | Dimmer 9 · B1 9 · B2 11 |
 | Triaj la capacitate mică (K = 1–5 pe săptămână) | repară 38–62% din defecte, față de 18–42% la B1 ordonat după capacitate |
 
-Pe validare, detecția era la paritate cu B1; pe test e mai bună, dar cu 10 defecte pe tip o parte din diferență poate fi întâmplare (secțiunile 7 și 8).
+Detalii și limite în secțiunile 7 și 8.
 
 ## 4. Cum rulezi
 
@@ -117,6 +128,8 @@ Citare: E. L. Ratnam, S. R. Weller, C. M. Kellett, A. T. Murray, „Residential 
 
 **Triajul** (`src/triage.py`). Simulare zi cu zi a unei cozi: o alarmă deschide un caz, echipa verifică K cazuri pe săptămână după prioritate; o vizită la o casă cu defect început îl repară, una irosită scoate casa din coadă 30 de zile.
 
+**Mesajul către prosumator** (`src/messages.py`, afișat în aplicație la fiecare alarmă CONTACTEAZĂ). O ciornă în română care spune ce s-a observat (cu cât consumă casa mai mult din rețea la orele de zi și că diferența urmărește soarele), ce ar putea costa (dacă `config/economics.json` are un preț), ce poate verifica clientul (afișajul invertorului, umbrirea, siguranțele) și că nu putem confirma de la distanță. Este un șablon de adaptat și de aprobat de un operator uman; sistemul nu trimite nimic singur. Pentru alarmele MONITORIZEAZĂ nu pleacă niciun mesaj.
+
 **Baseline-uri** (`src/baseline.py`), fără învățare automată: **B1** = alarmă după N zile la rând fără export la prânz (N = 10); **B2** = media pe 7 zile a abaterii netului de prânz față de același interval din anul de antrenare (h = 2,0). Pragurile se aleg pe validare cu aceeași limită de 2 alarme false la 1.000.
 
 ## 7. Evaluare
@@ -183,7 +196,7 @@ Test (kWh pierduți pe defect · defecte reparate · vizite irosite):
 
 Pe **validare** avantajul de energie nu apărea față de B1 ordonat după capacitate: K = 3 → 223 kWh (B1 după capacitate) față de 244 (Dimmer); fără limită 215 față de 239. Câștigul de acolo era în vizitele irosite (56 față de 82 la K = 3; 58 față de 104 fără limită). Diferența dintre cele două seturi vine în mare parte din tipurile de defect pe care B1 nu le vede (parțial, intermitent, treptat), prezente doar pe test.
 
-Observații: ordonarea după mărimea sistemului singură (B1 după capacitate) reduce energia pierdută cu mai mult de jumătate față de ordinea sosirii la K = 1 pe validare (822 → 372). În interiorul modelului cu decizie, scorul propriu (pierdere estimată × parte solară) e aproximativ egal cu ordonarea după capacitate la K ≥ 3 și puțin mai bun la K = 1–2 (de exemplu 339 față de 369 kWh la K = 1, pe test). Față de „model, toate alarmele, după pierdere", stratul de decizie pierde energie, dar evită vizite irosite; punctul de echilibru este de ordinul a 10–22 kWh de energie pe vizită evitată. **`config/economics.json` (prețul energiei, costul unei vizite) nu e completat**, deci nu publicăm un cost în monedă.
+Observații: ordonarea după mărimea sistemului singură (B1 după capacitate) reduce energia pierdută cu mai mult de jumătate față de ordinea sosirii la K = 1 pe validare (822 → 372). În interiorul modelului cu decizie, scorul propriu (pierdere estimată × parte solară) e aproximativ egal cu ordonarea după capacitate la K ≥ 3 și puțin mai bun la K = 1–2 (de exemplu 339 față de 369 kWh la K = 1, pe test). Față de „model, toate alarmele, după pierdere", stratul de decizie pierde energie, dar evită vizite irosite; punctul de echilibru este de ordinul a 10–22 kWh de energie pe vizită evitată. **Costuri** (`config/economics.json`). Prețul energiei: **1,30 lei/kWh**, preț final cu TVA al ofertelor standard pentru casnici în 2026 (interval 1,06–1,45; surse și dată în fișier; căutare din 7 noiembrie 2026, de reconfirmat pe comparatorul ANRE). Energia pierdută e valorizată la prețul plătit de client, deci e pierderea clientului, nu venitul furnizorului. Costul unei vizite (100 lei) este o **ipoteză conservativă, fără sursă publică**. Punctul de echilibru e de **13–29 lei pe vizită evitată** (10–22 kWh × 1,30): dacă o vizită costă mai mult, modelul câștigă. Cu aceste valori, la capacitate nelimitată: pe test, B1 după capacitate ≈ 27.500 lei și Dimmer ≈ 23.000 lei (−17%); pe validare ≈ 18.100 și ≈ 14.100 (−22%). Diferența vine în principal din vizitele evitate. Aplicația permite modificarea ambelor valori.
 
 ### 7.5 Analiza erorilor
 
@@ -203,7 +216,7 @@ Pe cele 12 case cu scădere reală, Dimmer a alarmat 9 (aceleași ca B1), B1 9, 
 - Modelul are nevoie de un an de istoric pe fiecare casă; nu funcționează pe case noi. Casele excluse din antrenare au predicții mai slabe.
 - Radiația vine dintr-un singur punct; orientarea și umbrirea acoperișurilor sunt învățate doar din anul de antrenare.
 - Datele sunt australiene (2010–2013), cu un singur an de antrenare; metoda se transferă, cifrele nu.
-- Costul unei vizite și prețul energiei nu sunt completate.
+- Costul unei vizite este o ipoteză fără sursă publică; prețul energiei vine din surse publice, de reconfirmat.
 
 ## 9. Relevanță pentru PPC
 
@@ -230,7 +243,7 @@ afk-ppc/
   run_pipeline.py        # rulează tot lanțul
   app/app.py             # aplicația demo (Streamlit)
   demo_data/test/        # date mici pentru aplicație (în repo)
-  config/                # praguri înghețate, scenarii de defecte, împărțirea în timp
+  config/                # praguri înghețate, scenarii de defecte, împărțirea în timp, economics.json
   reports/               # rezultate (validare și test)
   src/
     prepare.py           # curățarea datelor
@@ -243,6 +256,8 @@ afk-ppc/
     triage.py            # coada cu capacitate
     evalkit.py           # metrici comune
     inspect_misses.py    # analiza erorilor pe SNR
+    messages.py          # ciorna mesajului către client
+    fix_encoding.py      # reports/*.txt din UTF-16 în UTF-8
     make_demo_data.py    # pregătește demo_data/
   data/  models/         # generate local, nu sunt în repo
 ```

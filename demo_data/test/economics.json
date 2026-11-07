@@ -1,0 +1,8 @@
+{
+  "currency": "RON",
+  "price_per_kwh": 1.30,
+  "price_source": "Pret final, cu TVA, al ofertelor standard pentru consumatori casnici in 2026: 1,06-1,45 lei/kWh (comparator-energie.ro, septembrie 2026, pe baza ofertelor publice); PPC Energie 1,30 lei/kWh in ianuarie 2026 conform comparatorului ANRE, citat de Adevarul (https://adevarul.ro/economie/cat-va-costa-energia-electrica-din-2026-ce-se-2477176.html). Cautare facuta pe 7 noiembrie 2026; de reconfirmat pe POSF (ANRE).",
+  "price_note": "Energia pierduta este valorizata la pretul final platit de client (pierderea CLIENTULUI, nu venitul furnizorului).",
+  "visit_cost": 100.0,
+  "visit_cost_note": "IPOTEZA conservativa a autorilor, FARA sursa publica gasita. Punctul de echilibru este de 13-29 lei pe vizita evitata (10-22 kWh x 1,30 lei/kWh): daca o vizita costa mai mult, modelul castiga. Inlocuiti cu cifra reala a PPC/operatorului."
+}
