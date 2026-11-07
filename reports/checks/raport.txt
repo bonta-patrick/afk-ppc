@@ -1,0 +1,60 @@
+== 1. IMPARTIRE IN TIMP ==
+train 2010-07-01 .. 2011-06-30: 8760 ore, 297 case, lipsa 0.000%
+val   2011-07-01 .. 2012-06-30: 8784 ore, 297 case, lipsa 0.000%
+test  2012-07-01 .. 2013-06-30: 8760 ore, 297 case, lipsa 0.000%
+Granitele sunt in config/split.json
+
+== 2. RANDAMENT (kWh/kW instalat/zi), doar antrenare si validare ==
+train: mediana 3.50 | 5%-95%: 2.60 .. 4.03
+val  : mediana 3.42 | 5%-95%: 2.50 .. 4.02
+Raport validare/antrenare: mediana 0.984 (aproape de 1 = ani comparabili)
+Cele mai mici randamente in antrenare (posibil sistem slab, sau eroare de capacitate):
+   casa 234: 2.44  (70% din mediana)
+   casa 63: 2.44  (70% din mediana)
+   casa 280: 2.45  (70% din mediana)
+   casa 251: 2.47  (71% din mediana)
+   casa 48: 2.51  (72% din mediana)
+Cele mai mari scaderi antrenare -> validare (candidate la 'defecte reale probabile'):
+   casa 92: validare = 10% din antrenare
+   casa 239: validare = 37% din antrenare
+   casa 220: validare = 38% din antrenare
+   casa 234: validare = 60% din antrenare
+   casa 158: validare = 67% din antrenare
+
+== 2b. CASE CU SCADERE REALA DE PRODUCTIE (validare < 70% din antrenare): 5 ==
+   casa 92: validare = 10% din antrenare; prima luna sub 60% din nivelul propriu sanatos: 2011-09
+   casa 239: validare = 37% din antrenare; prima luna sub 60% din nivelul propriu sanatos: 2011-11
+   casa 220: validare = 38% din antrenare; prima luna sub 60% din nivelul propriu sanatos: 2011-09
+   casa 234: validare = 60% din antrenare; prima luna sub 60% din nivelul propriu sanatos: 2012-02
+   casa 158: validare = 67% din antrenare; prima luna sub 60% din nivelul propriu sanatos: 2011-10
+Randament lunar relativ (100 = ca mediana caselor); o casa sanatoasa ramane aproximativ constanta:
+          92  239  220  234  158
+2010-07   83  108  104   64  102
+2010-08   83  113  104   64  103
+2010-09   88  114   92   68  106
+2010-10   95  114   95   72  115
+2010-11   97  105   93   75  113
+2010-12  108  101   97   80  110
+2011-01   99  104   95   74  111
+2011-02   95  107   94   73  110
+2011-03   88  121   89   67  114
+2011-04   83  128   89   64  109
+2011-05   82  105   98   62  100
+2011-06   78  124  100   59  105
+2011-07   80  122  102   61  100
+2011-08   58  116   97   68  108
+2011-09    0  117   31   69  107
+2011-10    0  107    0   75   68
+2011-11    0   12   43   73   57
+2011-12    0    0   98   70   62
+2012-01    0    0   28   55   55
+2012-02    0    0    0    0    6
+2012-03    0    0    0    0   15
+2012-04    0    0    0    0  120
+2012-05    0    0    0    0  119
+2012-06    0   60   65    0  122
+Lista salvata in config/real_decline_homes.json (de exclus din injectare si calibrarea alarmelor false)
+
+Corelatie radiatie - productie medie (ore de zi, antrenare+validare): 0.929
+
+Grafice salvate in reports\checks/  (casa tipica folosita: 297)
