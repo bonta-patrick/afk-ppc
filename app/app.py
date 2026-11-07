@@ -29,17 +29,19 @@ DEMO = ROOT / "demo_data" / "test"
 st.set_page_config(page_title="Dimmer", page_icon="☀️", layout="wide", initial_sidebar_state="collapsed")
 
 # ------------------------------------------------------------------ design
+# Culorile seriilor sunt tonuri medii, lizibile si pe fundal deschis, si pe fundal inchis; textul graficelor
+# (axe, legende) il coloreaza tema Streamlit, deci urmeaza automat light/dark.
 BLUE, ORANGE, AQUA = "#2a78d6", "#eb6834", "#1baf7a"          # Dimmer, B1, B2
-INK, INK2, MUTED = "#0b0b0b", "#52514e", "#898781"
-GRID, AXIS = "#e1e0d9", "#c3c2b7"
+MUTED, NEUTRAL, AXIS = "#898781", "#8a8984", "#c3c2b7"
 CRIT, WARN = "#d03b3b", "#fab219"
 AMBER, VIOLET = "#eda100", "#6250d6"                           # cost: energie, vizite
+TRUTH = "#8070e8"                                              # marcajul „adevarului” pe graficul cazului
 FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'
 
-ACT = {  # culoare de stare, fundal, iconita, text
-    "CONTACTEAZA": (CRIT, "#fbe9e9", "☎", "Contactează"),
-    "MONITORIZEAZA": (WARN, "#fff4d6", "◷", "Monitorizează"),
-    "VERIFICA_DATE": (MUTED, "#efeeea", "⚠", "Verifică datele"),
+ACT = {  # culoare de stare, iconita, text (fundalul pastilei se calculeaza in CSS din culoare)
+    "CONTACTEAZA": (CRIT, "☎", "Contactează"),
+    "MONITORIZEAZA": (WARN, "◷", "Monitorizează"),
+    "VERIFICA_DATE": (MUTED, "⚠", "Verifică datele"),
 }
 TYPE_RO = {"total": "defect total", "partial": "defect parțial", "intermittent": "defect intermitent",
            "gradual": "defect treptat", "ac": "aer condiționat nou", "pool": "pompă de piscină nouă",
@@ -49,33 +51,46 @@ OUTCOME_RO = {"tp": "✅ defect găsit și reparat", "real": "🔎 scădere real
               "fp_pre": "❌ vizită irosită (defectul nu începuse)"}
 MONTHS_RO = "['ian','feb','mar','apr','mai','iun','iul','aug','sep','oct','noi','dec']"
 
+# Fundalul paginii si widget-urile native le da tema Streamlit (.streamlit/config.toml); CSS-ul de mai jos
+# coloreaza doar elementele noastre, prin variabile cu doua seturi: light (implicit) si dark.
+LIGHT_TOKENS = """--ink:#0b0b0b;--ink2:#52514e;--muted:#6f6e69;--hair:rgba(11,11,11,.10);--card:#fff;--card-alt:#fbfaf8;
+  --soft:#f3f2ee;--accent:#2a78d6;--accent-ink:#1c5cab;--accent-soft:#eaf2fc;--accent-line:#b7d3f6;
+  --note-bg:#fff8e6;--note-line:#f1d48a;--note-ink:#3d3a33;--info-bg:#eef5fd;--info-line:#cde2fb;
+  --ok-bg:#eef8ee;--ok-line:#cfe9cf;--flag-ink:#6b4e00;--flag-bg:#fff4d6;--shadow:0 1px 2px rgba(11,11,11,.04)"""
+DARK_TOKENS = """--ink:#ecebe6;--ink2:#bdbcb5;--muted:#93928b;--hair:rgba(255,255,255,.10);--card:#1c1c1a;--card-alt:#181817;
+  --soft:rgba(255,255,255,.045);--accent:#4a8fe0;--accent-ink:#8cbaf3;--accent-soft:rgba(74,143,224,.20);
+  --accent-line:rgba(74,143,224,.50);--note-bg:rgba(237,161,0,.10);--note-line:rgba(237,161,0,.38);--note-ink:#dcd9cf;
+  --info-bg:rgba(74,143,224,.12);--info-line:rgba(74,143,224,.38);--ok-bg:rgba(27,175,122,.12);
+  --ok-line:rgba(27,175,122,.38);--flag-ink:#f3c969;--flag-bg:rgba(250,178,25,.15);--shadow:none"""
+
 CSS = """
 <style>
-:root{--ink:#0b0b0b;--ink2:#52514e;--muted:#898781;--hair:rgba(11,11,11,.10);--card:#fff;--plane:#f6f5f2}
-.stApp{background:var(--plane)}
+:root, html[data-dm-theme="light"]{%(light)s}
+html[data-dm-theme="dark"]{%(dark)s}
 .stApp, .stApp button, .stApp input, .stApp textarea, .stApp select{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 .block-container,[data-testid="stMainBlockContainer"]{padding-top:4.2rem;padding-bottom:3rem;max-width:1240px}
 .stApp [class*="st-key-card"]{background:var(--card);border:1px solid var(--hair);border-radius:14px;
-  padding:16px 18px 10px;box-shadow:0 1px 2px rgba(11,11,11,.04)}
+  padding:16px 18px 10px;box-shadow:var(--shadow)}
 .dm-brand{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:0 0 4px}
 .dm-brand .nm{font-size:30px;font-weight:750;line-height:1.05;letter-spacing:-.02em;color:var(--ink)}
 .dm-brand .tg{color:var(--ink2);font-size:15px;margin-top:2px}
 .dm-chips{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
-.dm-chip{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink2);background:#fff;
+.dm-chip{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink2);background:var(--card);
   border:1px solid var(--hair);border-radius:999px;padding:3px 10px;white-space:nowrap}
-.dm-chip i{width:8px;height:8px;border-radius:50%;display:inline-block;background:var(--c,#898781)}
+.dm-chip i{width:8px;height:8px;border-radius:50%%;display:inline-block;background:var(--c,#898781)}
 .dm-h{font-size:12.5px;font-weight:650;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:26px 0 10px}
 .dm-h2{font-size:21px;font-weight:700;letter-spacing:-.01em;color:var(--ink);margin:4px 0 2px}
 .dm-sub{color:var(--ink2);font-size:14.5px;line-height:1.5;margin:0 0 6px;max-width:900px}
+.dm-sub b,.dm-lead b,.dm-note b,.dm-reveal b{color:var(--ink)}
 .dm-grid{display:grid;gap:12px}
 .dm-g4{grid-template-columns:repeat(4,minmax(0,1fr))}
 .dm-g3{grid-template-columns:repeat(3,minmax(0,1fr))}
 .dm-g2{grid-template-columns:repeat(2,minmax(0,1fr))}
 @media (max-width:980px){.dm-g4,.dm-g3{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:600px){.dm-g4,.dm-g3,.dm-g2{grid-template-columns:1fr}}
-.dm-card{background:var(--card);border:1px solid var(--hair);border-radius:14px;padding:16px 18px}
-.dm-step .n{width:26px;height:26px;border-radius:50%;background:#eaf2fc;color:#1c5cab;font-weight:700;font-size:13px;
-  display:flex;align-items:center;justify-content:center;margin-bottom:10px}
+.dm-card{background:var(--card);border:1px solid var(--hair);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow)}
+.dm-step .n{width:26px;height:26px;border-radius:50%%;background:var(--accent-soft);color:var(--accent-ink);font-weight:700;
+  font-size:13px;display:flex;align-items:center;justify-content:center;margin-bottom:10px}
 .dm-step b{display:block;font-size:15px;margin-bottom:4px;color:var(--ink)}
 .dm-step p,.dm-act p{margin:0;color:var(--ink2);font-size:13.5px;line-height:1.45}
 .dm-act{border-left:4px solid var(--c)}
@@ -84,12 +99,12 @@ CSS = """
 .dm-tile .v{font-size:32px;font-weight:650;line-height:1.15;margin:6px 0 4px;color:var(--ink)}
 .dm-tile .v small{font-size:15px;font-weight:500;color:var(--ink2);margin-left:4px}
 .dm-tile .s{font-size:12.5px;color:var(--muted);line-height:1.4}
-.dm-tile.hl{border-color:#b7d3f6;box-shadow:inset 0 3px 0 #2a78d6}
+.dm-tile.hl,.dm-cmp.hl{border-color:var(--accent-line);box-shadow:inset 0 3px 0 var(--accent)}
 .dm-pill{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--ink);
-  background:var(--bg);border-radius:999px;padding:3px 10px;white-space:nowrap}
-.dm-pill i{width:8px;height:8px;border-radius:50%;background:var(--c)}
-.dm-note{background:#fff8e6;border:1px solid #f1d48a;border-radius:12px;padding:14px 16px;color:#3d3a33;font-size:14px;line-height:1.55}
-.dm-note b{color:#0b0b0b}
+  background:color-mix(in srgb,var(--c) 16%%,transparent);border-radius:999px;padding:3px 10px;white-space:nowrap}
+.dm-pill i{width:8px;height:8px;border-radius:50%%;background:var(--c)}
+.dm-note{background:var(--note-bg);border:1px solid var(--note-line);border-radius:12px;padding:14px 16px;color:var(--note-ink);
+  font-size:14px;line-height:1.55}
 .dm-lead{font-size:17px;line-height:1.55;color:var(--ink);max-width:900px;margin:6px 0 0}
 .dm-tl .it{display:grid;grid-template-columns:96px 160px 1fr;gap:12px;align-items:start;padding:11px 0;border-top:1px solid var(--hair)}
 .dm-tl .it:first-child{border-top:0}
@@ -98,9 +113,10 @@ CSS = """
 @media (max-width:760px){.dm-tl .it{grid-template-columns:1fr;gap:4px}}
 .dm-case{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:2px}
 .dm-case .t{font-size:22px;font-weight:700;margin-right:6px;color:var(--ink)}
-.dm-reveal{background:#eef5fd;border:1px solid #cde2fb;border-radius:12px;padding:12px 14px;font-size:14px;line-height:1.5;color:var(--ink)}
-.dm-neu{background:#f3f2ee;border:1px solid var(--hair);border-radius:12px;padding:12px 14px;font-size:14px;color:var(--ink2);max-width:820px}
-.dm-ok{background:#eef8ee;border:1px solid #cfe9cf;border-radius:12px;padding:12px 14px;font-size:14px;color:var(--ink)}
+.dm-reveal{background:var(--info-bg);border:1px solid var(--info-line);border-radius:12px;padding:12px 14px;font-size:14px;
+  line-height:1.5;color:var(--ink)}
+.dm-neu{background:var(--soft);border:1px solid var(--hair);border-radius:12px;padding:12px 14px;font-size:14px;color:var(--ink2);max-width:820px}
+.dm-ok{background:var(--ok-bg);border:1px solid var(--ok-line);border-radius:12px;padding:12px 14px;font-size:14px;color:var(--ink)}
 .dm-foot{color:var(--muted);font-size:12.5px;margin-top:34px;padding-top:14px;border-top:1px solid var(--hair)}
 .dm-list{margin:0;padding-left:18px;color:var(--ink);font-size:14px;line-height:1.6}
 .dm-cmp .hd{display:flex;align-items:center;gap:8px;margin-bottom:2px}
@@ -110,17 +126,47 @@ CSS = """
 .dm-cmp .row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:7px 0;border-top:1px solid var(--hair)}
 .dm-cmp .row span{font-size:13px;color:var(--ink2)}
 .dm-cmp .row strong{font-size:20px;font-weight:650;color:var(--ink);font-variant-numeric:tabular-nums}
-.dm-cmp .row strong.best{color:#1c5cab}
-.dm-cmp.hl{border-color:#b7d3f6;box-shadow:inset 0 3px 0 #2a78d6}
-.dm-cmp.alt{background:#fbfaf8;border-style:dashed}
-.dm-mail{background:#fff;border:1px solid var(--hair);border-radius:14px;overflow:hidden;max-width:820px}
-.dm-mail .top{background:#f3f2ee;padding:12px 18px;border-bottom:1px solid var(--hair);font-size:13.5px;color:var(--ink2);line-height:1.7}
+.dm-cmp .row strong.best{color:var(--accent-ink)}
+.dm-cmp.alt{background:var(--card-alt);border-style:dashed}
+.dm-mail{background:var(--card);border:1px solid var(--hair);border-radius:14px;overflow:hidden;max-width:820px}
+.dm-mail .top{background:var(--soft);padding:12px 18px;border-bottom:1px solid var(--hair);font-size:13.5px;color:var(--ink2);line-height:1.7}
 .dm-mail .top b{color:var(--ink);font-weight:600}
 .dm-mail .body{padding:16px 18px;font-size:14.5px;line-height:1.6;color:var(--ink);white-space:pre-wrap}
-.dm-mail .flag{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#6b4e00;background:#fff4d6;
-  border-radius:999px;padding:2px 9px;margin-left:6px}
+.dm-mail .flag{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--flag-ink);
+  background:var(--flag-bg);border-radius:999px;padding:2px 9px;margin-left:6px}
 </style>
-"""
+""" % {"light": LIGHT_TOKENS, "dark": DARK_TOKENS}
+
+# Streamlit nu reruleaza scriptul cand utilizatorul schimba tema din meniu, deci tema activa o citim in browser:
+# luminozitatea fundalului pus de Streamlit -> <html data-dm-theme="light|dark">, verificata continuu.
+THEME_JS = """<script>
+(function () {
+  function bg() {
+    var els = [document.querySelector('[data-testid="stApp"]'), document.body, document.documentElement];
+    for (var i = 0; i < els.length; i++) {
+      if (!els[i]) continue;
+      var m = (getComputedStyle(els[i]).backgroundColor.match(/[\\d.]+/g) || []).map(Number);
+      if (m.length >= 3 && (m.length < 4 || m[3] > 0)) return m;
+    }
+    return null;
+  }
+  function check() {
+    var m = bg();
+    if (!m) return;
+    var t = (0.2126 * m[0] + 0.7152 * m[1] + 0.0722 * m[2]) / 255 < 0.5 ? "dark" : "light";
+    if (document.documentElement.getAttribute("data-dm-theme") !== t) document.documentElement.setAttribute("data-dm-theme", t);
+  }
+  check();
+  if (!window.__dmThemeWatch) window.__dmThemeWatch = setInterval(check, 250);
+})();
+</script>"""
+
+
+def theme_css():
+    """CSS-ul aplicatiei; pana porneste scriptul din browser, folosim tema raportata de Streamlit (evita o clipire)."""
+    first = f':root:not([data-dm-theme]){{{DARK_TOKENS}}}' if st.context.theme.type == "dark" else ""
+    return CSS.replace("</style>", first + "</style>")
+
 
 LOGO = """<svg xmlns="http://www.w3.org/2000/svg" width="42" height="42" viewBox="0 0 42 42" aria-hidden="true">
 <g stroke="#eda100" stroke-width="2.6" stroke-linecap="round">
@@ -147,8 +193,8 @@ def ro(x, d=1):
 
 
 def pill(action):
-    c, bg, icon, label = ACT[action]
-    return f'<span class="dm-pill" style="--c:{c};--bg:{bg}"><i></i>{icon} {label}</span>'
+    c, icon, label = ACT[action]
+    return f'<span class="dm-pill" style="--c:{c}"><i></i>{icon} {label}</span>'
 
 
 def tile(label, value, sub="", hl=False):
@@ -185,13 +231,15 @@ def num_axis(title, thousands=False):
 
 
 def show(chart, height=330):
+    """Fara culori de text fixate: Streamlit coloreaza axele si legenda dupa tema activa (si le redeseneaza la
+    schimbarea temei); noi doar le estompam cu opacitate, ca sa arate la fel in light si dark."""
     ch = (chart.properties(height=height, background="transparent")
           .configure_view(stroke=None)
-          .configure_axis(labelColor=MUTED, titleColor=INK2, gridColor=GRID, domainColor=AXIS, tickColor=AXIS,
-                          labelFont=FONT, titleFont=FONT, labelFontSize=11.5, titleFontSize=12,
-                          titleFontWeight="normal", labelPadding=6)
-          .configure_legend(orient="top", labelColor=INK2, labelFont=FONT, labelFontSize=12.5, titleFontSize=12,
-                            titleColor=MUTED, titleFont=FONT, titleFontWeight="normal", symbolStrokeWidth=2.5,
+          .configure_axis(labelFont=FONT, titleFont=FONT, labelFontSize=11.5, titleFontSize=12, titleFontWeight="normal",
+                          labelPadding=6, labelOpacity=0.68, titleOpacity=0.8, gridOpacity=0.55,
+                          domainColor=NEUTRAL, domainOpacity=0.6, tickColor=NEUTRAL, tickOpacity=0.6)
+          .configure_legend(orient="top", labelFont=FONT, labelFontSize=12.5, titleFontSize=12, titleFont=FONT,
+                            titleFontWeight="normal", labelOpacity=0.85, titleOpacity=0.65, symbolStrokeWidth=2.5,
                             columnPadding=18, labelLimit=320)
           .configure_text(font=FONT))
     st.altair_chart(ch, width="stretch", theme=None)
@@ -429,11 +477,11 @@ def page_case():
         if len(ev_h):
             pts = ev_h[["date", "action", "explicatie"]].copy()
             pts["y"] = df.set_index("date")["real"].reindex(pts["date"]).to_numpy()
-            pts["actiune"] = pts["action"].map(lambda a: f"{ACT[a][2]} {ACT[a][3]}")
+            pts["actiune"] = pts["action"].map(lambda a: f"{ACT[a][1]} {ACT[a][2]}")
             pts["zi"] = pts["date"].dt.strftime("%d.%m.%Y")
             pts["expl"] = pts["explicatie"].fillna("").map(lambda s: s if len(s) < 190 else s[:187] + "…")
-            dom = [f"{ACT[a][2]} {ACT[a][3]}" for a in ACT]
-            layers.append(alt.Chart(pts).mark_point(filled=True, size=95, stroke="#ffffff", strokeWidth=2, opacity=1).encode(
+            dom = [f"{ACT[a][1]} {ACT[a][2]}" for a in ACT]
+            layers.append(alt.Chart(pts).mark_point(filled=True, size=85, opacity=1).encode(
                 x="date:T", y="y:Q",
                 color=alt.Color("actiune:N", scale=alt.Scale(domain=dom, range=[ACT[a][0] for a in ACT]),
                                 legend=alt.Legend(title="Alarme", symbolType="circle", orient="bottom")),
@@ -442,9 +490,9 @@ def page_case():
         start = lab.loc[h, "start"] if (truth and h in lab.index) else None
         if start is not None:
             mk = pd.DataFrame({"date": [start], "txt": [f"Începe {TYPE_RO[lab.loc[h, 'type']]}: {start:%d.%m.%Y}"]})
-            layers.append(alt.Chart(mk).mark_rule(color=INK, strokeWidth=1.2).encode(
+            layers.append(alt.Chart(mk).mark_rule(color=TRUTH, strokeWidth=1.6).encode(
                 x="date:T", tooltip=alt.Tooltip("txt:N", title="Adevărul")))
-            layers.append(alt.Chart(mk).mark_point(shape="triangle-down", filled=True, size=110, color=INK, opacity=1).encode(
+            layers.append(alt.Chart(mk).mark_point(shape="triangle-down", filled=True, size=110, color=TRUTH, opacity=1).encode(
                 x="date:T", y=alt.value(0), tooltip=alt.Tooltip("txt:N", title="Adevărul")))
         show(alt.layer(*layers).resolve_scale(color="independent", strokeDash="independent"), height=340)
         st.caption("Zona roșie: contorul arată mai mult consum net decât aștepta modelul (posibil producție lipsă). "
@@ -459,13 +507,13 @@ def page_case():
                           "Producție după defectul simulat": (smooth(after), BLUE, [1, 0])}
                 r = lab.loc[h]
                 msg = (f"<b>Adevărul:</b> {TYPE_RO[r['type']]} simulat din {r['start']:%d.%m.%Y} "
-                       f"(linia neagră din graficul de sus); pierdere medie {ro(r['mean_effect_kwh_per_day'])} kWh/zi.")
+                       f"(linia violet din graficul de sus); pierdere medie {ro(r['mean_effect_kwh_per_day'])} kWh/zi.")
             elif kind == "load":
                 series = {"Producția (neschimbată: panourile funcționează)": (smooth(g), BLUE, [1, 0]),
                           "Consum nou adăugat": (smooth(D["added"][h]), ORANGE, [1, 0])}
                 r = lab.loc[h]
                 msg = (f"<b>Adevărul:</b> panourile funcționează; am adăugat consum de tip "
-                       f"<i>{TYPE_RO[r['type']]}</i> din {r['start']:%d.%m.%Y} (linia neagră din graficul de sus).")
+                       f"<i>{TYPE_RO[r['type']]}</i> din {r['start']:%d.%m.%Y} (linia violet din graficul de sus).")
             elif kind == "real":
                 series = {"Producția reală măsurată": (smooth(g), BLUE, [1, 0])}
                 msg = ("<b>Adevărul:</b> producția reală a scăzut în această perioadă. "
@@ -629,21 +677,20 @@ def page_queue():
         long["comp"] = long["comp"].map({"energie": "Energie pierdută", "vizite": "Vizite"})
         long["ord"] = long["comp"].map({"Energie pierdută": 0, "Vizite": 1})
         long["lei_s"] = long["lei"].map(lambda v: f"{ro(v, 0)} {CUR}")
-        cdf["total_s"] = cdf["total"].map(lambda v: f"{ro(v, 0)} {CUR}")
-        order = [short[n] for n in names]
-        y = alt.Y("pol:N", sort=order, axis=alt.Axis(title=None, labelColor=INK2, labelFontSize=12.5, labelLimit=260,
-                                                     domain=False, ticks=False))
-        bars = alt.Chart(long).mark_bar(size=22, stroke="#ffffff", strokeWidth=2).encode(
-            y=y, x=alt.X("lei:Q", stack="zero", axis=num_axis(CUR, thousands=True),
-                         scale=alt.Scale(domainMax=float(cdf["total"].max()) * 1.18)),
+        # totalul sta in eticheta axei (colorata de tema), nu ca text desenat peste grafic
+        total_lbl = {r.pol: f"{r.pol}  ·  {ro(r.total, 0)} {CUR}" for r in cdf.itertuples()}
+        long["pol_t"] = long["pol"].map(total_lbl)
+        order = [total_lbl[short[n]] for n in names]
+        y = alt.Y("pol_t:N", sort=order, axis=alt.Axis(title=None, labelFontSize=12.5, labelLimit=340, labelOpacity=0.9,
+                                                       domain=False, ticks=False))
+        bars = alt.Chart(long).mark_bar(size=22).encode(
+            y=y, x=alt.X("lei:Q", stack="zero", axis=num_axis(CUR, thousands=True)),
             color=alt.Color("comp:N", scale=alt.Scale(domain=["Energie pierdută", "Vizite"], range=[AMBER, VIOLET]),
                             legend=alt.Legend(title=None, symbolType="square")),
             order=alt.Order("ord:Q"),
             tooltip=[alt.Tooltip("pol:N", title="Politică"), alt.Tooltip("comp:N", title="Componentă"),
                      alt.Tooltip("lei_s:N", title="Cost")])
-        totals = alt.Chart(cdf).mark_text(align="left", dx=6, color=INK, fontSize=12.5, fontWeight=600).encode(
-            y=alt.Y("pol:N", sort=order), x="total:Q", text="total_s:N")
-        show(alt.layer(bars, totals), height=210)
+        show(bars, height=210)
         st.caption(f"Energie = kWh pierduți pe defect × {n_f} defecte × preț (pierderea clientului, la prețul final). "
                    f"Vizite = numărul total de vizite × costul unei vizite. Modificați valorile de mai sus ca să vedeți "
                    f"când merită modelul: cu cât o vizită costă mai mult, cu atât contează mai mult vizitele evitate.")
@@ -686,26 +733,21 @@ def page_real():
         prod = pd.DataFrame({"date": g.index, "v": g.to_numpy()})
         prod["vs"] = prod["v"].map(lambda v: f"{ro(v)} kWh/zi")
         prod["zi"] = prod["date"].dt.strftime("%d.%m.%Y")
+        # data primei alarme sta in legenda (nu ca text peste grafic, unde se suprapunea cu liniile apropiate)
         marks = []
-        for i, (lbl, df_) in enumerate((("B1", b1), ("B2", b2), ("Dimmer", dec))):
+        for lbl, df_, c in (("B1", b1, ORANGE), ("B2", b2, AQUA), ("Dimmer", dec, BLUE)):
             d0 = first(df_, h)
-            if pd.notna(d0):
-                marks.append({"date": d0, "met": lbl, "i": i, "txt": f" {lbl}: {d0:%d.%m.%Y}"})
+            marks.append({"date": d0, "met": f"{lbl}: {d0:%d.%m.%Y}" if pd.notna(d0) else f"{lbl}: fără alarmă", "c": c})
         x = alt.X("date:T", axis=date_axis())
-        line = alt.Chart(prod).mark_line(color=INK2, strokeWidth=2).encode(
+        line = alt.Chart(prod).mark_line(color=NEUTRAL, strokeWidth=2).encode(
             x=x, y=alt.Y("v:Q", axis=num_axis("Producția reală, kWh pe zi")),
             tooltip=[alt.Tooltip("zi:N", title="Ziua"), alt.Tooltip("vs:N", title="Producție")])
-        layers = [line]
-        if marks:
-            mk = pd.DataFrame(marks)
-            scale = alt.Scale(domain=["B1", "B2", "Dimmer"], range=[ORANGE, AQUA, BLUE])
-            layers.append(alt.Chart(mk).mark_rule(strokeWidth=2).encode(
-                x="date:T", color=alt.Color("met:N", scale=scale, legend=alt.Legend(title="Prima alarmă", symbolType="stroke"))))
-            for _, r in mk.iterrows():
-                layers.append(alt.Chart(pd.DataFrame([r])).mark_text(align="left", baseline="top", color=INK2, fontSize=11.5,
-                                                                    dx=3, dy=4 + 15 * int(r["i"])).encode(
-                    x="date:T", y=alt.value(0), text="txt:N"))
-        show(alt.layer(*layers), height=330)
+        mk = pd.DataFrame(marks)
+        scale = alt.Scale(domain=mk["met"].tolist(), range=mk["c"].tolist())
+        rules = alt.Chart(mk.dropna(subset=["date"])).mark_rule(strokeWidth=2).encode(
+            x="date:T", color=alt.Color("met:N", scale=scale, legend=alt.Legend(title="Prima alarmă", symbolType="stroke")),
+            tooltip=alt.Tooltip("met:N", title="Prima alarmă"))
+        show(alt.layer(line, rules), height=330)
         st.caption("Sistemul nu vede producția, doar netul; aici o afișăm ca să se vadă scăderea.")
 
     section("Prima alarmă pe fiecare casă")
@@ -758,7 +800,7 @@ def page_results():
     with c1.container(key="card_det"):
         order = [TYPE_RO[t] for t in FAULT_TYPES]
         bars = alt.Chart(det).mark_bar(size=18, cornerRadiusTopLeft=4, cornerRadiusTopRight=4).encode(
-            x=alt.X("tip:N", sort=order, axis=alt.Axis(title=None, labelAngle=0, labelColor=INK2, labelFontSize=12.5),
+            x=alt.X("tip:N", sort=order, axis=alt.Axis(title=None, labelAngle=0, labelFontSize=12.5, labelOpacity=0.85),
                     scale=alt.Scale(paddingInner=0.25)),
             xOffset=alt.XOffset("metoda:N", sort=["B1", "B2", "Dimmer"], scale=alt.Scale(paddingInner=0.12)),
             y=alt.Y("prinse:Q", scale=alt.Scale(domain=[0, 100]), axis=alt.Axis(title="Defecte prinse", format=".0f",
@@ -814,7 +856,7 @@ def page_results():
 
 
 # ================================================================== cadru comun
-st.html(CSS)
+st.html(theme_css())
 pg = st.navigation([st.Page(page_overview, title="Prezentare", icon="☀️", url_path="prezentare", default=True),
                     st.Page(page_case, title="Un caz", icon="🔍", url_path="caz"),
                     st.Page(page_queue, title="Coada de verificări", icon="🧰", url_path="coada"),
@@ -826,7 +868,8 @@ st.html(f'<div class="dm-brand">{LOGO_IMG}<div><div class="nm">Dimmer</div>'
         f'<div class="dm-chips"><span class="dm-chip">Ausgrid · Sydney · {len(D["net"].columns)} case</span>'
         f'<span class="dm-chip">Test {meta["start"][:7]} → {meta["end"][:7]}</span>'
         f'<span class="dm-chip" style="--c:{BLUE}"><i></i>praguri înghețate</span>'
-        f'<span class="dm-chip" style="--c:{WARN}"><i></i>defecte simulate pe producție reală</span></div></div>')
+        f'<span class="dm-chip" style="--c:{WARN}"><i></i>defecte simulate pe producție reală</span></div></div>'
+        + THEME_JS, unsafe_allow_javascript=True)
 pg.run()
 st.html('<div class="dm-foot">Date: Ausgrid Solar Home Electricity Data (CC BY) · radiație: Open-Meteo · '
         'model LightGBM antrenat de echipă, rulat local · cod și rezultate reproductibile în repo.</div>')

@@ -72,7 +72,20 @@ python run_pipeline.py            # până la validare (fără testul final)
 python run_pipeline.py --test     # adaugă testul final, rulat O SINGURĂ DATĂ
 ```
 
-Antrenarea durează aproximativ 40 de secunde pe variantă pe laptopul autorilor (5 variante). Scriptul se oprește la prima eroare și spune la ce pas.
+Antrenarea durează aproximativ 40 de secunde pe variantă pe laptopul autorilor (5 variante). Scriptul rulează pașii din tabelul 4.3 în ordine, se oprește la prima eroare, spune la ce pas și cum se reia.
+
+Alte opțiuni:
+
+```bash
+python run_pipeline.py --list          # arată toți pașii și iese
+python run_pipeline.py --dry-run       # arată comenzile care s-ar rula, fără să le ruleze
+python run_pipeline.py --from 5        # reia de la pasul 5 (de exemplu după o eroare)
+python run_pipeline.py --only 6,7      # doar pașii 6 și 7
+python run_pipeline.py --only-test     # doar testul final, cu modelele și pragurile deja existente
+python run_pipeline.py --extras        # plus pașii opționali (ablația --peer on, inspect_misses, check_test)
+```
+
+Ieșirea fiecărui pas se vede live și se salvează în UTF-8 în `reports/logs/<pas>.txt`. Testul final e protejat: nu pornește dacă există deja rezultate pe test (`reports/triage_test.csv`) sau dacă pragurile din `config/` diferă de cele de la tag-ul git `pre-test`; `--force-test` trece peste protecție.
 
 ### 4.3 Pașii pe rând (din rădăcina repo-ului)
 

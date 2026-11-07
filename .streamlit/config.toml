@@ -1,15 +1,26 @@
+# Doua teme (light si dark). Streamlit urmeaza tema sistemului, iar din meniul ⋮ (dreapta sus)
+# se poate alege System / Light / Dark. CSS-ul si graficele din app/app.py se adapteaza singure.
 [theme]
-base = "light"
+baseRadius = "10px"
+font = "sans-serif"
+
+[theme.light]
 primaryColor = "#2a78d6"
 backgroundColor = "#f6f5f2"
 secondaryBackgroundColor = "#ecebe6"
 textColor = "#0b0b0b"
 borderColor = "#e1e0d9"
-baseRadius = "10px"
-font = "sans-serif"
+
+[theme.dark]
+primaryColor = "#4a8fe0"
+backgroundColor = "#121211"
+secondaryBackgroundColor = "#232321"
+textColor = "#ecebe6"
+borderColor = "#34342f"
 
 [client]
-toolbarMode = "minimal"
+# "viewer": arata meniul pentru vizitatori (inclusiv comutatorul de tema), ascunde optiunile de dezvoltator
+toolbarMode = "viewer"
 
 [browser]
 gatherUsageStats = false
