@@ -7,6 +7,7 @@ Citeste doar din demo_data/test/ (creat de src/make_demo_data.py), deci ruleaza 
 Design: navigare sus, carduri, grafice Altair interactive (tooltip pe fiecare grafic).
 Culori: albastru = Dimmer, portocaliu = B1, turcoaz = B2 (validate pentru daltonism);
 actiunile au culori de stare + iconita + text, niciodata doar culoare.
+Costuri: chihlimbar = energie pierduta, violet = vizite (validate separat).
 """
 import base64
 import html as _html
@@ -22,6 +23,7 @@ import streamlit as st
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 from triage import run_queue, metrics  # noqa: E402
+from messages import customer_message  # noqa: E402
 
 DEMO = ROOT / "demo_data" / "test"
 st.set_page_config(page_title="Dimmer", page_icon="☀️", layout="wide", initial_sidebar_state="collapsed")
@@ -31,6 +33,7 @@ BLUE, ORANGE, AQUA = "#2a78d6", "#eb6834", "#1baf7a"          # Dimmer, B1, B2
 INK, INK2, MUTED = "#0b0b0b", "#52514e", "#898781"
 GRID, AXIS = "#e1e0d9", "#c3c2b7"
 CRIT, WARN = "#d03b3b", "#fab219"
+AMBER, VIOLET = "#eda100", "#6250d6"                           # cost: energie, vizite
 FONT = 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'
 
 ACT = {  # culoare de stare, fundal, iconita, text
@@ -96,9 +99,26 @@ CSS = """
 .dm-case{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:2px}
 .dm-case .t{font-size:22px;font-weight:700;margin-right:6px;color:var(--ink)}
 .dm-reveal{background:#eef5fd;border:1px solid #cde2fb;border-radius:12px;padding:12px 14px;font-size:14px;line-height:1.5;color:var(--ink)}
+.dm-neu{background:#f3f2ee;border:1px solid var(--hair);border-radius:12px;padding:12px 14px;font-size:14px;color:var(--ink2);max-width:820px}
 .dm-ok{background:#eef8ee;border:1px solid #cfe9cf;border-radius:12px;padding:12px 14px;font-size:14px;color:var(--ink)}
 .dm-foot{color:var(--muted);font-size:12.5px;margin-top:34px;padding-top:14px;border-top:1px solid var(--hair)}
 .dm-list{margin:0;padding-left:18px;color:var(--ink);font-size:14px;line-height:1.6}
+.dm-cmp .hd{display:flex;align-items:center;gap:8px;margin-bottom:2px}
+.dm-cmp .hd i{width:10px;height:10px;border-radius:3px;background:var(--c)}
+.dm-cmp .hd b{font-size:16px;color:var(--ink)}
+.dm-cmp .sb{font-size:12.5px;color:var(--muted);margin-bottom:10px}
+.dm-cmp .row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:7px 0;border-top:1px solid var(--hair)}
+.dm-cmp .row span{font-size:13px;color:var(--ink2)}
+.dm-cmp .row strong{font-size:20px;font-weight:650;color:var(--ink);font-variant-numeric:tabular-nums}
+.dm-cmp .row strong.best{color:#1c5cab}
+.dm-cmp.hl{border-color:#b7d3f6;box-shadow:inset 0 3px 0 #2a78d6}
+.dm-cmp.alt{background:#fbfaf8;border-style:dashed}
+.dm-mail{background:#fff;border:1px solid var(--hair);border-radius:14px;overflow:hidden;max-width:820px}
+.dm-mail .top{background:#f3f2ee;padding:12px 18px;border-bottom:1px solid var(--hair);font-size:13.5px;color:var(--ink2);line-height:1.7}
+.dm-mail .top b{color:var(--ink);font-weight:600}
+.dm-mail .body{padding:16px 18px;font-size:14.5px;line-height:1.6;color:var(--ink);white-space:pre-wrap}
+.dm-mail .flag{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#6b4e00;background:#fff4d6;
+  border-radius:999px;padding:2px 9px;margin-left:6px}
 </style>
 """
 
@@ -214,7 +234,39 @@ R = {"b1_rec": _b1["prinse"].mean(), "b2_rec": _b2["prinse"].mean(),
      "b1_fa": _b1["fa_la_1000_zile_casa"].iloc[0], "b2_fa": _b2["fa_la_1000_zile_casa"].iloc[0],
      "dm_rec": float(np.mean([D["mt"].loc["full", f"{t}_prinse%"] for t in FAULT_TYPES])),
      "dm_fa": float(D["mt"].loc["full", "FA_la_1000"]), "dm_mae": float(D["mt"].loc["full", "MAE_kWh_ora"]),
-     "base_mae": 0.5124, "dec_rec": 62, "dec_fa": 1.00, "pool_raw": 100, "pool_dec": 40}
+     "base_mae": 0.5124, "dec_rec": 62, "dec_fa": 1.00, "pool_raw": 100, "pool_dec": 40,
+     "b1_kwh": _b1["kWh_pierduti_pana_la_detectie"].mean(), "b2_kwh": _b2["kWh_pierduti_pana_la_detectie"].mean(),
+     "dm_kwh": float(D["mt"].loc["full", "kWh_pierduti_medie"]), "dec_kwh": 223}
+
+# preturi (config/economics.json, copiat de make_demo_data.py); valori implicite doar daca lipseste fisierul
+ECON_PATH = DEMO / "economics.json"
+ECON = (json.loads(ECON_PATH.read_text(encoding="utf-8")) if ECON_PATH.exists()
+        else {"currency": "RON", "price_per_kwh": 1.30, "visit_cost": 100.0,
+              "price_source": "valoare implicită; completați config/economics.json", "visit_cost_note": "ipoteză"})
+CUR = "lei" if ECON.get("currency", "RON") == "RON" else ECON.get("currency", "")
+
+
+def compare_cards(with_raw=False):
+    """Comparatia principala pe test: B1, B2 si Dimmer (model + verificare), cu valorile cele mai bune evidentiate."""
+    rows = [("Defecte simulate prinse", "rec", "%", True), ("Alarme false / 1.000 zile-casă", "fa", "", False),
+            ("kWh pierduți pe defect", "kwh", "", False)]
+    meths = [("B1", "regulă simplă: fără export la prânz", ORANGE,
+              {"rec": R["b1_rec"], "fa": R["b1_fa"], "kwh": R["b1_kwh"]}, ""),
+             ("B2", "abatere față de anul trecut", AQUA, {"rec": R["b2_rec"], "fa": R["b2_fa"], "kwh": R["b2_kwh"]}, ""),
+             ("Dimmer", "model + verificarea „soare sau consum”", BLUE,
+              {"rec": R["dec_rec"], "fa": R["dec_fa"], "kwh": R["dec_kwh"]}, " hl")]
+    best = {k: (max if hi else min)(m[3][k] for m in meths) for _, k, _, hi in rows}
+    if with_raw:
+        meths.append(("Dimmer fără verificare", "mai sensibil, dar cu mai multe vizite false", BLUE,
+                      {"rec": R["dm_rec"], "fa": R["dm_fa"], "kwh": R["dm_kwh"]}, " alt"))
+    fmt = {"rec": lambda v: f"{ro(v, 1 if v % 1 else 0)}%", "fa": lambda v: ro(v, 2), "kwh": lambda v: ro(v, 0)}
+    cards = []
+    for name, sub, c, vals, cls in meths:
+        body = "".join(f'<div class="row"><span>{lbl}</span><strong class="{"best" if vals[k] == best[k] and "alt" not in cls else ""}">'
+                       f'{fmt[k](vals[k])}</strong></div>' for lbl, k, _, _ in rows)
+        cards.append(f'<div class="dm-card dm-cmp{cls}" style="--c:{c}"><div class="hd"><i></i><b>{name}</b></div>'
+                     f'<div class="sb">{sub}</div>{body}</div>')
+    return grid(cards, 4 if with_raw else 3)
 
 
 def home_label(h):
@@ -288,7 +340,12 @@ def page_overview():
             ("VERIFICA_DATE", "Prea puține zile cu date sau prea multe citiri lipsă. Agentul spune „nu sunt sigur”.")]
     st.html(grid([f'<div class="dm-card dm-act" style="--c:{ACT[a][0]}">{pill(a)}<p>{t}</p></div>' for a, t in acts], 3))
 
-    section("Rezultate pe testul final (2012-07 → 2013-06, rulat o singură dată)")
+    section("Testul final (2012-07 → 2013-06, rulat o singură dată): Dimmer prinde mai mult, cu mai puține vizite false")
+    st.html(compare_cards())
+    st.caption("Pentru Dimmer, o alarmă falsă este o alarmă „Contactează” pe o casă curată, adică o vizită irosită; "
+               "pentru B1 și B2, orice alarmă duce la o vizită. Pe validare, la același procent de defecte prinse ca B1 (80%), "
+               "Dimmer a făcut jumătate din vizitele false (0,57 față de 1,11), cu ~11% mai mulți kWh pierduți. "
+               f"Fără verificarea soare/consum, modelul prinde {ro(R['dm_rec'], 1)}%, dar la {ro(R['dm_fa'], 2)} alarme false.")
     tri = D["tri"]
     k3 = tri[tri["K_pe_sapt"] == "3"].set_index("politica")
     dm3 = k3[k3.index.str.startswith("5.")].iloc[0]
@@ -296,18 +353,12 @@ def page_overview():
     st.html(grid([
         tile("Eroarea de predicție", f"−{ro(100 * (1 - R['dm_mae'] / R['base_mae']), 0)}%",
              f"{ro(R['dm_mae'], 3)} față de {ro(R['base_mae'], 3)} kWh/oră (media casei la aceeași oră și lună)"),
-        tile("Defecte prinse, cu stratul de decizie", f"{R['dec_rec']}%",
-             f"B1: {ro(R['b1_rec'], 0)}% · la {ro(R['dec_fa'], 2)} față de {ro(R['b1_fa'], 2)} alarme false / 1.000 zile-casă",
-             hl=True),
         tile("Defecte reparate la 3 verificări/săpt.", f"{dm3['defecte_reparate%']:.0f}%",
              f"B1: {b13['defecte_reparate%']:.0f}% · {ro(dm3['kWh_pierduti_pe_defect'], 0)} față de "
              f"{ro(b13['kWh_pierduti_pe_defect'], 0)} kWh pierduți pe defect", hl=True),
         tile("Piscină nouă luată drept defect", f"{R['pool_dec']}%",
              f"față de {R['pool_raw']}% fără verificarea „soare sau consum”"),
-    ], 4))
-    st.caption(f"Fără stratul de decizie, modelul prinde {ro(R['dm_rec'], 1)}% din defecte (B1: {ro(R['b1_rec'], 1)}%, "
-               f"B2: {ro(R['b2_rec'], 0)}%), dar la {ro(R['dm_fa'], 2)} alarme false / 1.000 zile-casă "
-               f"(B1: {ro(R['b1_fa'], 2)}, B2: {ro(R['b2_fa'], 2)}). Detalii în „Rezultate”.")
+    ], 3))
 
     section("Ce nu pretindem")
     st.html('<div class="dm-note"><b>Defectele sunt simulate</b> pe producție reală; nu am confirmat defecte fizice. '
@@ -329,6 +380,9 @@ def page_case():
     left, right = st.columns([1.25, 3], gap="medium")
     with left.container(key="card_pick"):
         cat = st.pills("Tipul casei", list(cats), default="Defect simulat", required=True, key="cat")
+        if not cats[cat]:
+            st.info("Nu există case în această categorie în datele curente.")
+            return
         h = st.selectbox("Casa", cats[cat], key=f"home_{cat}",
                          format_func=lambda x: home_label(x) + (f" · {int(n_al.get(x, 0))} alarme" if cat == "Casă curată" else ""))
         truth = st.toggle("🔍 Arată adevărul", key="truth", help="Producția reală e ascunsă pentru sistem; o afișăm doar aici.")
@@ -447,6 +501,31 @@ def page_case():
         else:
             st.html('<div class="dm-ok">✓ Nicio alarmă în perioada de test.</div>')
 
+    section("Mesajul către client")
+    contact_h = ev_h[ev_h["action"] == "CONTACTEAZA"]
+    if len(contact_h):
+        last = contact_h.iloc[-1]
+        msg = customer_message(last, ECON)
+        lines = msg.split("\n")
+        if lines and lines[0].startswith("Subiect:"):
+            subject, body = lines[0][len("Subiect:"):].strip(), "\n".join(lines[1:]).strip("\n")
+        else:
+            subject, body = "Producția panourilor dumneavoastră", msg
+        st.html(f'<div class="dm-mail"><div class="top"><b>Către:</b> prosumatorul casei {esc(h)}'
+                f'<span class="flag">✎ ciornă · se trimite doar după aprobarea unui operator</span><br>'
+                f'<b>Subiect:</b> {esc(subject)}<br>'
+                f'<b>Declanșat de:</b> alarma „Contactează” din {last["date"]:%d.%m.%Y}</div>'
+                f'<div class="body">{esc(body)}</div></div>')
+        c1, c2 = st.columns([1, 3], vertical_alignment="center")
+        c1.download_button("⬇ Descarcă ciorna (.txt)", msg, file_name=f"mesaj_casa_{h}_{last['date']:%Y%m%d}.txt",
+                           mime="text/plain", key="dl_msg")
+        c2.caption("Șablon de adaptat și de aprobat de un operator uman; sistemul nu trimite nimic singur. "
+                   "Mesajul nu afirmă că panourile sunt defecte (nu putem ști de la distanță).")
+    else:
+        why = ("are doar alarme „Monitorizează” sau „Verifică datele”" if len(ev_h) else "nu are nicio alarmă")
+        st.html(f'<div class="dm-neu">Pentru casa {esc(h)} nu pleacă niciun mesaj către client: {why}. '
+                f'Mesajul se pregătește doar pentru alarmele „Contactează”.</div>')
+
 
 def page_queue():
     page_title("Coada de verificări sub capacitate limitată",
@@ -505,7 +584,7 @@ def page_queue():
 
     section("Toate politicile")
     rows = [{"Politică": short[n], "Reparate": res[n][0]["defecte_reparate%"], "kWh_med": res[n][0]["kWh_pierduti_pe_defect"],
-             "kWh_mdn": res[n][0]["kWh_mediana_pe_defect"], "Găsite": res[n][0]["gasite"],
+             "kWh_mdn": res[n][0]["kWh_mediana_pe_defect"], "Vizite": res[n][0]["vizite_total"], "Găsite": res[n][0]["gasite"],
              "Irosite": res[n][0]["irosite"], "Precizie": res[n][0]["precizie%"],
              "Zile": res[n][0]["zile_mediane_pana_la_reparatie"]} for n in names]
     st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch", column_config={
@@ -514,9 +593,60 @@ def page_queue():
         "Precizie": st.column_config.ProgressColumn("Precizie", min_value=0, max_value=100, format="%.0f%%"),
         "kWh_med": st.column_config.NumberColumn("kWh/defect", format="%.0f", help="kWh pierduți pe defect, medie"),
         "kWh_mdn": st.column_config.NumberColumn("kWh/defect (med.)", format="%.0f", help="kWh pierduți pe defect, mediană"),
+        "Vizite": st.column_config.NumberColumn("Vizite totale", width="small"),
         "Găsite": st.column_config.NumberColumn(width="small"),
         "Irosite": st.column_config.NumberColumn("Vizite irosite", width="small"),
         "Zile": st.column_config.NumberColumn("Zile până la reparare", format="%.0f", help="mediana")})
+
+    section(f"Costul în {CUR}, cu ipoteze pe care le puteți modifica ({kt})")
+    with st.container(key="card_cost"):
+        k1, k2, k3 = st.columns([1, 1, 2], gap="medium", vertical_alignment="bottom")
+        price = k1.number_input(f"Prețul energiei ({CUR}/kWh)", min_value=0.0, max_value=10.0,
+                                value=float(ECON["price_per_kwh"]), step=0.05, key="price")
+        visit = k2.number_input(f"Costul unei vizite ({CUR})", min_value=0.0, max_value=5000.0,
+                                value=float(ECON["visit_cost"]), step=10.0, key="visit")
+        with k3.popover("De unde vin valorile?", width="stretch"):
+            st.markdown(f"**Prețul energiei.** {ECON.get('price_source', '')}")
+            if ECON.get("price_note"):
+                st.markdown(ECON["price_note"])
+            st.markdown(f"**Costul unei vizite.** {ECON.get('visit_cost_note', '')}")
+        n_f = D["lost"].shape[1]
+        crow = []
+        for n in names:
+            mm = res[n][0]
+            e, v = mm["kWh_pierduti_pe_defect"] * n_f * price, mm["vizite_total"] * visit
+            crow.append({"pol": short[n], "n": n, "energie": e, "vizite": v, "total": e + v})
+        cdf = pd.DataFrame(crow)
+        dm_t = cdf.loc[cdf["n"] == POL_DM, "total"].iloc[0]
+        b1c_t = cdf.loc[cdf["n"] == POL_B1C, "total"].iloc[0]
+        st.html(grid([tile("Cost total Dimmer", f"{ro(dm_t, 0)}<small>{CUR}</small>",
+                           f"energie pierdută + vizite, pe cele {n_f} defecte simulate", hl=True),
+                      tile("Cost total B1 după capacitate", f"{ro(b1c_t, 0)}<small>{CUR}</small>",
+                           "cea mai bună variantă a regulii simple"),
+                      tile("Diferență", f"{'−' if dm_t <= b1c_t else '+'}{ro(abs(1 - dm_t / b1c_t) * 100, 0)}%",
+                           f"{ro(abs(b1c_t - dm_t), 0)} {CUR} {'economisiți' if dm_t <= b1c_t else 'în plus'} cu Dimmer")], 3))
+        long = cdf.melt(id_vars=["pol", "total"], value_vars=["energie", "vizite"], var_name="comp", value_name="lei")
+        long["comp"] = long["comp"].map({"energie": "Energie pierdută", "vizite": "Vizite"})
+        long["ord"] = long["comp"].map({"Energie pierdută": 0, "Vizite": 1})
+        long["lei_s"] = long["lei"].map(lambda v: f"{ro(v, 0)} {CUR}")
+        cdf["total_s"] = cdf["total"].map(lambda v: f"{ro(v, 0)} {CUR}")
+        order = [short[n] for n in names]
+        y = alt.Y("pol:N", sort=order, axis=alt.Axis(title=None, labelColor=INK2, labelFontSize=12.5, labelLimit=260,
+                                                     domain=False, ticks=False))
+        bars = alt.Chart(long).mark_bar(size=22, stroke="#ffffff", strokeWidth=2).encode(
+            y=y, x=alt.X("lei:Q", stack="zero", axis=num_axis(CUR, thousands=True),
+                         scale=alt.Scale(domainMax=float(cdf["total"].max()) * 1.18)),
+            color=alt.Color("comp:N", scale=alt.Scale(domain=["Energie pierdută", "Vizite"], range=[AMBER, VIOLET]),
+                            legend=alt.Legend(title=None, symbolType="square")),
+            order=alt.Order("ord:Q"),
+            tooltip=[alt.Tooltip("pol:N", title="Politică"), alt.Tooltip("comp:N", title="Componentă"),
+                     alt.Tooltip("lei_s:N", title="Cost")])
+        totals = alt.Chart(cdf).mark_text(align="left", dx=6, color=INK, fontSize=12.5, fontWeight=600).encode(
+            y=alt.Y("pol:N", sort=order), x="total:Q", text="total_s:N")
+        show(alt.layer(bars, totals), height=210)
+        st.caption(f"Energie = kWh pierduți pe defect × {n_f} defecte × preț (pierderea clientului, la prețul final). "
+                   f"Vizite = numărul total de vizite × costul unei vizite. Modificați valorile de mai sus ca să vedeți "
+                   f"când merită modelul: cu cât o vizită costă mai mult, cu atât contează mai mult vizitele evitate.")
 
     with st.expander("Jurnalul verificărilor făcute de Dimmer"):
         vis = res[POL_DM][1]
@@ -532,6 +662,9 @@ def page_real():
                "Pe lângă defectele simulate, datele conțin case a căror producție <b>a scăzut real</b>. Nu știm de ce "
                "(defect, umbră, panou scos), deci le numim <i>episoade probabile</i>. Lista vine dintr-o regulă fixă "
                "(randamentul din perioadă sub 70% din cel din anul de antrenare), nu din vreun model.")
+    if not real_homes:
+        st.info("Nu există case cu scădere reală în datele curente.")
+        return
     b1, b2 = D["b1"], D["b2"]
     first = lambda df, h: df.loc[df["home"] == h, "date"].min()  # noqa: E731
     rows = []
@@ -588,6 +721,11 @@ def page_results():
     page_title("Rezultatele, cinstit",
                "Toate pragurile au fost alese pe anul de validare și <b>înghețate</b> înainte de testul final, rulat o singură dată.")
 
+    section("0 · Comparația principală (test)")
+    st.html(compare_cards(with_raw=True))
+    st.caption("Ultimul card (chenar punctat) este un alt punct de funcționare: modelul fără verificarea „soare sau consum”, "
+               "mai sensibil, dar cu mai multe vizite false. Nu îl comparați direct cu B1.")
+
     section("1 · Predicția")
     st.html(grid([tile("Baseline: media casei la aceeași oră și lună", f"{ro(R['base_mae'], 3)}<small>kWh/oră</small>",
                        "validare 0,503"),
@@ -604,7 +742,7 @@ def page_results():
             "FA_la_1000": st.column_config.NumberColumn("Alarme false / 1.000", format="%.2f"),
             "kWh_pierduti_medie": st.column_config.NumberColumn("kWh pierduți (medie)", format="%.1f")})
 
-    section("2 · Detecția, pe tipul de defect (test, praguri înghețate)")
+    section("2 · Detecția, pe tipul de defect (test, praguri înghețate; Dimmer = modelul fără verificare)")
     b = D["bt"]
     rows = []
     for typ in FAULT_TYPES:
@@ -632,9 +770,9 @@ def page_results():
         show(bars, height=300)
     with c2:
         st.html(grid([tile("Alarme false / 1.000 zile-casă", f"{ro(R['dm_fa'], 2)}",
-                           f"Dimmer, ținta era ≤ 2,0 · B1 {ro(R['b1_fa'], 2)} · B2 {ro(R['b2_fa'], 2)}"),
+                           f"Dimmer fără verificare (ținta era ≤ 2,0) · B1 {ro(R['b1_fa'], 2)} · B2 {ro(R['b2_fa'], 2)}"),
                       tile("Defecte prinse, medie pe 4 tipuri", f"{ro(R['dm_rec'], 1)}%",
-                           f"B1 {ro(R['b1_rec'], 1)}% · B2 {ro(R['b2_rec'], 0)}%", hl=True)], 2))
+                           f"Dimmer fără verificare · B1 {ro(R['b1_rec'], 1)}% · B2 {ro(R['b2_rec'], 0)}%", hl=True)], 2))
         piv = det.pivot(index="tip", columns="metoda", values="zile").reindex(order)[["B1", "B2", "Dimmer"]]
         st.caption("Zile mediane până la alarmă")
         st.dataframe(piv, width="stretch", column_config={c: st.column_config.NumberColumn(format="%.1f") for c in piv.columns})
