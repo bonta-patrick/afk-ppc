@@ -4,7 +4,7 @@ messages.py - texte pentru alarme, in romana si engleza (parametrul lang="ro" | 
   - customer_message(row, econ, lang): ciorna mesajului catre prosumator, pentru alarmele CONTACTEAZA
 
 Mesajul este un SABLON: textul il adapteaza si il aproba un operator uman inainte de trimitere.
-Sistemul nu trimite nimic singur. Mesajul nu afirma ca panourile sunt defecte (nu putem sti
+Sistemul nu trimite nimic singur. Mesajul nu afirma ca sistemul (panouri, cabluri, invertor) e defect (nu putem sti
 de la distanta); spune ce s-a observat, cat ar putea costa si ce poate verifica clientul.
 
 Pierderea afisata clientului este DOAR partea care urmareste soarele:
@@ -54,20 +54,20 @@ def explain_alert(row, lang="ro"):
     if action == "VERIFICA_DATE":
         if note == "few_days":
             if en:
-                return (f"Start of period: only {n_days} days of history, too little to tell a failed panel from a new load. "
+                return (f"Start of period: only {n_days} days of history, too little to tell a fault in the solar system (panels, wiring, inverter, etc.) from a new load. "
                         f"We will reassess once we have at least {MIN_DAYS} days.")
-            return (f"Început de perioadă: doar {n_days} zile de istoric, prea puțin pentru a deosebi un panou stricat "
-                    f"de un consum nou. Reevaluăm când avem cel puțin {MIN_DAYS} zile.")
+            return (f"Început de perioadă: doar {n_days} zile de istoric, prea puțin pentru a deosebi o defecțiune a sistemului solar "
+                    f"(panouri, cabluri, invertor etc.) de un consum nou. Reevaluăm când avem cel puțin {MIN_DAYS} zile.")
         miss = _num(row, "missing")
         if en:
             return f"Unreliable data ({f(100 * miss, 0)}% of daytime readings are missing): we check the data before taking any action."
         return f"Date nesigure ({f(100 * miss, 0)}% din citirile de zi lipsesc): verificăm datele înainte de orice acțiune."
     if note == "flat_sun":
         if en:
-            return ("Deviation during the day, but the sun varied too little over the last 28 days to tell a failed panel "
-                    "from a new load. Waiting for days with different sun.")
-        return ("Abatere la orele de zi, dar soarele a variat prea puțin în ultimele 28 de zile ca să deosebim un panou stricat "
-                "de un consum nou. Așteptăm zile cu soare diferit.")
+            return ("Deviation during the day, but the sun varied too little over the last 28 days to tell a fault in the solar system "
+                    "(panels, wiring, inverter, etc.) from a new load. Waiting for days with different sun.")
+        return ("Abatere la orele de zi, dar soarele a variat prea puțin în ultimele 28 de zile ca să deosebim o defecțiune a sistemului solar "
+                "(panouri, cabluri, invertor etc.) de un consum nou. Așteptăm zile cu soare diferit.")
     if note == "small_excess" or pd.isna(sun) or pd.isna(total):
         return "Small, inconclusive deviation; we keep monitoring." if en else "Abatere mică și neconcludentă; continuăm monitorizarea."
     if action == "CONTACTEAZA":
@@ -82,9 +82,9 @@ def explain_alert(row, lang="ro"):
                 f"Pierdere estimată din producție: ~{f(solar)} kWh/zi.")
     if en:
         return (f"Net consumption is {f(total)} kWh/day above normal during the day, but only {f(100 * sun, 0)}% of the deviation "
-                f"follows the sun: it looks like a new load, not a failed panel. We are not sending a technician; we will reassess.")
+                f"follows the sun: it looks like a new load, not a fault in the solar system. We are not sending a technician; we will reassess.")
     return (f"Consumul net e cu {f(total)} kWh/zi peste normal la orele de zi, dar doar {f(100 * sun, 0)}% din abatere "
-            f"urmărește soarele: seamănă cu un consum nou, nu cu un panou stricat. Nu trimitem tehnician; reevaluăm.")
+            f"urmărește soarele: seamănă cu un consum nou, nu cu o defecțiune a sistemului solar. Nu trimitem tehnician; reevaluăm.")
 
 
 def customer_message(row, econ=None, sender=None, lang="ro"):
@@ -96,9 +96,9 @@ def customer_message(row, econ=None, sender=None, lang="ro"):
     cur_code = (econ or {}).get("currency", "RON")
     cur = ("lei" if cur_code == "RON" and not en else cur_code)
     if en:
-        parts = ["Subject: Your solar panels may be producing less than usual", "", "Hello,", ""]
+        parts = ["Subject: Your solar system may be producing less than usual", "", "Hello,", ""]
     else:
-        parts = ["Subiect: Producția panourilor dumneavoastră pare mai mică decât de obicei", "", "Bună ziua,", ""]
+        parts = ["Subiect: Producția sistemului dumneavoastră fotovoltaic pare mai mică decât de obicei", "", "Bună ziua,", ""]
     if pd.notna(total) and pd.notna(solar):
         if en:
             incert = "" if (pd.notna(sun) and sun >= 0.7) else " (with some uncertainty)"
@@ -119,8 +119,8 @@ def customer_message(row, econ=None, sender=None, lang="ro"):
         else:
             parts.append(f"Analizând datele contorului dumneavoastră din ultimele aproximativ {n_days} de zile, am observat că, în orele de zi, "
                          f"consumul dumneavoastră net este mai mare decât ne-am fi așteptat, iar diferența pare legată de soare.")
-    parts.append("This can be a sign that your panels or inverter are producing less than they should." if en
-                 else "Acesta poate fi un semn că panourile sau invertorul produc mai puțin decât ar trebui.")
+    parts.append("This can be a sign that part of your solar system is producing less than it should: not necessarily the panels, it may also be the wiring, the inverter or another component." if en
+                 else "Acesta poate fi un semn că o parte a sistemului fotovoltaic produce mai puțin decât ar trebui: nu neapărat panourile, ci și cablurile, invertorul sau altă componentă.")
     if econ and econ.get("price_per_kwh") and pd.notna(solar):
         cost_day = solar * float(econ["price_per_kwh"])
         price = f(float(econ["price_per_kwh"]), 2)
@@ -137,6 +137,7 @@ def customer_message(row, econ=None, sender=None, lang="ro"):
                   "What you can quickly check:",
                   "  - the inverter display or app: does it show errors or zero production?",
                   "  - whether the panels are shaded or covered (leaves, snow, dirt);",
+                  "  - whether the visible cables and connectors look damaged or loose;",
                   "  - whether the breakers or switches of the solar system are on.",
                   "",
                   "If you like, we can help you schedule a check. Simply reply to this message.",
@@ -150,6 +151,7 @@ def customer_message(row, econ=None, sender=None, lang="ro"):
                   "Ce puteți verifica rapid:",
                   "  • afișajul sau aplicația invertorului: arată erori sau o producție egală cu zero?",
                   "  • dacă panourile sunt umbrite sau acoperite (frunze, zăpadă, murdărie);",
+                  "  • dacă cablurile și conectorii vizibili par deteriorați sau slăbiți;",
                   "  • dacă siguranțele sau întrerupătoarele sistemului fotovoltaic sunt pornite.",
                   "",
                   "Dacă doriți, vă putem ajuta să programați o verificare. Răspundeți pur și simplu la acest mesaj.",

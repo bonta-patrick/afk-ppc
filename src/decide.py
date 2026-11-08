@@ -116,7 +116,7 @@ def explain(r, action):
                 f"verificam datele inainte de orice actiune.")
     if r["note"] == "flat_sun":
         return ("Abatere la orele de zi, dar soarele a variat prea putin in ultimele 28 de zile ca sa deosebim "
-                "un panou stricat de un consum nou. Asteptam zile cu soare diferit.")
+                "o defectiune a sistemului solar (panouri, cabluri, invertor etc.) de un consum nou. Asteptam zile cu soare diferit.")
     if r["note"] == "small_excess" or pd.isna(r["solar_frac"]):
         return "Abatere mica si neconcludenta; continuam monitorizarea."
     if action == ACTION_CONTACT:
@@ -127,7 +127,7 @@ def explain(r, action):
                    "indiciu moderat ca lipseste productia solara (merita verificat, cu incredere medie)")
                 + f". Pierdere estimata: {loss:.1f} kWh/zi.")
     return (f"Consum net cu {loss:.1f} kWh/zi peste normal la orele de zi, dar doar {max(r['solar_frac'], 0):.0%} din "
-            f"abatere urmareste soarele: seamana cu un consum nou, nu cu un panou stricat. Nu trimitem tehnician; reevaluam.")
+            f"abatere urmareste soarele: seamana cu un consum nou, nu cu o defectiune a sistemului solar. Nu trimitem tehnician; reevaluam.")
 
 
 # ------------------------------------------------------------------ evaluare

@@ -236,10 +236,10 @@ TX = {
     "pill": ("Agent de triaj pentru prosumatori", "Triage agent for solar prosumers"),
     "hero_a": ("Contorul vede doar ce rămâne.", "The meter only sees what's left."),
     "hero_b": ("Dimmer găsește ce lipsește.", "Dimmer finds what's missing."),
-    "hero_sub": ("Un panou solar oprit nu dă nicio alarmă, iar contorul vede doar diferența dintre consum și producție. "
-                 "Dimmer ghicește ce ar trebui să arate contorul, deosebește un panou stricat de un consum nou și spune cine merită verificat primul.",
-                 "A solar panel that stops working raises no alarm, and the meter only sees the difference between consumption and production. "
-                 "Dimmer estimates what the meter should read, tells a failed panel from a new load, and says who is worth checking first."),
+    "hero_sub": ("Un sistem solar care nu mai produce (panou, cablu sau invertor defect) nu dă nicio alarmă, iar contorul vede doar diferența dintre consum și producție. "
+                 "Dimmer ghicește ce ar trebui să arate contorul, deosebește o defecțiune a sistemului solar (panouri, cabluri, invertor etc.) de un consum nou și spune cine merită verificat primul.",
+                 "A solar system that stops producing (a faulty panel, cable or inverter) raises no alarm, and the meter only sees the difference between consumption and production. "
+                 "Dimmer estimates what the meter should read, tells a fault in the solar system (panels, wiring, inverter, etc.) from a new load, and says who is worth checking first."),
 
     # --- prezentare: avantaje
     "s1_eye": ("Avantaje măsurate", "Measured results"),
@@ -342,7 +342,7 @@ TX = {
     "it4_p": ("CUSUM, cu pragul ales pe validare la o țintă de alarme false.", "CUSUM, with the threshold chosen on validation for a target false-alarm rate."),
     "it4_g": ("", ""),
     "it5_t": ("Verificare soare/consum", "Sun/consumption check"),
-    "it5_p": ("Separă un panou stricat de un consum constant.", "Separates a failed panel from a constant load."),
+    "it5_p": ("Separă o defecțiune a sistemului solar (panouri, cabluri, invertor) de un consum constant.", "Separates a solar-system fault (panels, wiring, inverter) from a constant load."),
     "it5_g": ("Cazuri", "Cases"),
     "it6_t": ("Baseline-uri", "Baselines"),
     "it6_p": ("Două reguli simple și o a treia, ordonată după capacitate, ca comparația să fie corectă.", "Two simple rules and a third, ordered by capacity, so the comparison is fair."),
@@ -409,16 +409,16 @@ TX = {
     "lg_p_real": ("producția reală (kWh/zi)", "real production (kWh/day)"),
     "tr_fault": ("Adevărul: {k} simulat din {d}; pierdere medie {x} kWh/zi.", "The truth: simulated {k} from {d}; average loss {x} kWh/day."),
     "tr_load": ("Adevărul: panourile funcționează; am adăugat consum de tip {k} din {d}.", "The truth: the panels work; we added a new load of type {k} from {d}."),
-    "tr_real": ("Adevărul: producția reală a scăzut în această perioadă. Cauza nu o cunoaștem (poate fi defect, umbră, panou scos).",
-                "The truth: real production dropped in this period. We do not know the cause (a fault, shade, or a removed panel)."),
+    "tr_real": ("Adevărul: producția reală a scăzut în această perioadă. Cauza nu o cunoaștem (poate fi un defect la panouri, cabluri sau invertor, umbră, panou scos).",
+                "The truth: real production dropped in this period. We do not know the cause (a fault in the panels, wiring or inverter, shade, or a removed panel)."),
     "tr_clean": ("Adevărul: casă fără nicio modificare simulată; alarmele de mai sus sunt alarme false.", "The truth: a home with no simulated change; the alerts above are false alarms."),
     "al_head": ("Alarme · casa {h} · {n}", "Alerts · home {h} · {n}"),
     "al_last": ("Sunt afișate ultimele 6 din {n} alarme.", "Showing the last 6 of {n} alerts."),
     "al_none": ("Nicio alarmă în perioada de test.", "No alerts in the test period."),
     "msg_eye": ("Mesaj către client", "Customer message"),
     "msg_exp": ("Ciornă pentru ultima alarmă CONTACTEAZĂ", "Draft for the latest CONTACT alert"),
-    "msg_cap": ("Șablon de adaptat și de aprobat de un operator uman; sistemul nu trimite nimic singur. Mesajul nu afirmă că panourile sunt defecte (nu putem ști de la distanță).",
-                "A template to be adapted and approved by a human operator; the system sends nothing on its own. The message does not claim the panels are faulty (we cannot know remotely)."),
+    "msg_cap": ("Șablon de adaptat și de aprobat de un operator uman; sistemul nu trimite nimic singur. Mesajul nu afirmă că sistemul e defect și nici ce componentă (panouri, cabluri, invertor): nu putem ști de la distanță.",
+                "A template to be adapted and approved by a human operator; the system sends nothing on its own. The message does not claim the system is faulty, nor which component (panels, wiring, inverter): we cannot know remotely."),
     "msg_none": ("Pentru această casă nu pleacă niciun mesaj către client: nicio alarmă de tip CONTACTEAZĂ.", "No customer message is sent for this home: there is no CONTACT alert."),
 
     # --- coada
@@ -463,9 +463,9 @@ TX = {
     # --- episoade reale
     "r_eye": ("Date reale", "Real data"),
     "r_title": ("Episoade reale de scădere a producției", "Real production-drop episodes"),
-    "r_sub": ("Pe lângă defectele simulate, datele conțin case a căror producție a scăzut real. Nu știm de ce (defect, umbră, panou scos), deci le numim episoade probabile. "
+    "r_sub": ("Pe lângă defectele simulate, datele conțin case a căror producție a scăzut real. Nu știm de ce (defect la panouri, cabluri sau invertor, umbră, panou scos), deci le numim episoade probabile. "
               "Lista s-a stabilit după o regulă fixă (randamentul din perioadă sub 70% din cel din anul de antrenare), nu după rezultatele vreunui model, iar casele nu au primit defecte simulate.",
-              "Besides the simulated faults, the data contains homes whose production really dropped. We do not know why (a fault, shade, a removed panel), so we call them probable episodes. "
+              "Besides the simulated faults, the data contains homes whose production really dropped. We do not know why (a fault in the panels, wiring or inverter, shade, a removed panel), so we call them probable episodes. "
               "The list was set by a fixed rule (yield in the period below 70% of the training year), not by the results of any model, and these homes received no simulated faults."),
     "r_none": ("Nu există case cu scădere reală în datele curente.", "There are no real-drop homes in the current data."),
     "r_of": ("{a} din {b}", "{a} of {b}"),
@@ -668,8 +668,8 @@ TX.update({
     "c_proj": ("Proiecție, neinclusă mai sus: ~{k} kWh/zi → ~{v} {cur} în următoarele 30 de zile, dacă abaterea se menține.",
                "Projection, not included above: ~{k} kWh/day → ~{v} {cur} over the next 30 days, if the deviation persists."),
     "c_noloss": ("Pierderea solară nu se poate estima pentru acest caz.", "The solar loss cannot be estimated for this case."),
-    "c_disc": ("Indiciu că lipsește producția solară, nu un defect confirmat: doar o verificare la fața locului îl poate confirma.",
-               "An indication that solar production is missing, not a confirmed fault: only an on-site check can confirm it."),
+    "c_disc": ("Indiciu că lipsește producția solară, nu un defect confirmat. Cauza nu e neapărat la panouri: pot fi și cablurile, invertorul sau altă componentă; doar o verificare la fața locului o poate stabili.",
+               "An indication that solar production is missing, not a confirmed fault. The cause is not necessarily the panels: it may also be the wiring, the inverter or another component; only an on-site check can tell."),
     "c_report": ("Descarcă raportul (.md)", "Download the report (.md)"),
     "c_timeline": ("Alarmele cazului", "The case's alerts"),
     "dm_inbox": ("Inbox demo", "Demo inbox"),
@@ -760,7 +760,7 @@ METER_TX = {
     "seen": ("Furnizorul vede doar: net = consum − producție", "The utility only sees: net = consumption − production"),
     "gap": ("Față de o zi normală cu același soare", "Versus a normal day with the same sun"),
     "sun": ("Soare", "Sun"), "cons": ("Consumul de bază", "Base consumption"),
-    "broken": ("Panouri stricate pe jumătate", "Panels half broken"),
+    "broken": ("Defect: producție la jumătate (panouri, cabluri, invertor)", "Fault: half production (panels, wiring, inverter)"),
     "poolc": ("Piscină nouă (+0,8 kWh/oră)", "New pool (+0.8 kWh/hour)"),
     "unit": ("kWh/oră", "kWh/hour"),
     "exp": ("casa trimite curent în rețea (export)", "the home sends power to the grid (export)"),
@@ -768,10 +768,10 @@ METER_TX = {
     "bal": ("echilibru", "balanced"),
     "t_both": ("Ambele deodată. Contorul vede doar suma: netul e cu {gap} kWh/oră peste o zi normală. Din numărul ăsta singur nu ai cum să le desparți.",
                "Both at once. The meter only sees the sum: net is {gap} kWh/hour above a normal day. From this number alone you cannot tell them apart."),
-    "t_broken": ("Panourile pierd {loss} kWh în ora asta, iar netul crește cu {gap}. Coboară soarele: diferența scade odată cu el. La 0% soare, un panou stricat nu se mai vede deloc.",
-                 "The panels lose {loss} kWh this hour and net rises by {gap}. Lower the sun: the gap shrinks with it. At 0% sun, a broken panel is invisible."),
-    "t_pool": ("Piscina adaugă 0,80 kWh în fiecare oră, indiferent de soare. Pentru contor arată ca un panou stricat: netul crește cu {gap}. Coboară soarele: diferența rămâne la fel.",
-               "The pool adds 0.80 kWh every hour, whatever the sun. To the meter it looks like a broken panel: net rises by {gap}. Lower the sun: the gap stays the same."),
+    "t_broken": ("Sistemul solar pierde {loss} kWh în ora asta, iar netul crește cu {gap}. Coboară soarele: diferența scade odată cu el. La 0% soare, defectul nu se mai vede deloc, oricare ar fi componenta.",
+                 "The solar system loses {loss} kWh this hour and net rises by {gap}. Lower the sun: the gap shrinks with it. At 0% sun, the fault is invisible, whatever the component."),
+    "t_pool": ("Piscina adaugă 0,80 kWh în fiecare oră, indiferent de soare. Pentru contor arată ca un sistem solar defect: netul crește cu {gap}. Coboară soarele: diferența rămâne la fel.",
+               "The pool adds 0.80 kWh every hour, whatever the sun. To the meter it looks like a faulty solar system: net rises by {gap}. Lower the sun: the gap stays the same."),
     "t_norm_exp": ("Casă normală. Produce mai mult decât consumă, deci netul e negativ: trimite curent în rețea. Bifează una dintre situații.",
                    "Normal home. It produces more than it uses, so net is negative: it sends power to the grid. Tick one of the situations."),
     "t_norm_imp": ("Casă normală. Consumă mai mult decât produce, deci ia curent din rețea. Bifează una dintre situații.",

@@ -1,14 +1,14 @@
 # afk-ppc · Dimmer
 
-> Un agent care găsește panourile solare stricate „pe tăcute" doar din citirile contorului net și decide **cine merită verificat primul**, fără să trimită tehnicieni degeaba.
+> Un agent care găsește sistemele solare care s-au defectat „pe tăcute" (panouri, cabluri, invertor etc.) doar din citirile contorului net și decide **cine merită verificat primul**, fără să trimită tehnicieni degeaba.
 
-**English summary.** Rooftop-solar customers have a net meter: the supplier sees only import minus export, so a failed panel looks like "the customer uses more power". Dimmer (1) predicts each home's expected net reading with a LightGBM model trained on one clean year, (2) accumulates evidence over days with CUSUM, (3) checks whether the gap *grows with the sun* (a missing panel) or is roughly constant (a new load such as a pool pump), and (4) ranks the resulting cases under a weekly inspection capacity. Everything is evaluated on a held-out year, run once with frozen thresholds, on real data with **simulated** faults. On the test year, model + decision catches 62% of simulated faults at 1.00 false dispatches per 1,000 home-days, versus 42.5% at 1.40 for the best simple rule (B1); on validation it matched B1's recall at half the false dispatches. The main value is triage. Limitations are listed in section 8.
+**English summary.** Rooftop-solar customers have a net meter: the supplier sees only import minus export, so a failed solar system (panels, wiring, inverter) looks like "the customer uses more power". Dimmer (1) predicts each home's expected net reading with a LightGBM model trained on one clean year, (2) accumulates evidence over days with CUSUM, (3) checks whether the gap *grows with the sun* (missing solar production) or is roughly constant (a new load such as a pool pump), and (4) ranks the resulting cases under a weekly inspection capacity. Everything is evaluated on a held-out year, run once with frozen thresholds, on real data with **simulated** faults. On the test year, model + decision catches 62% of simulated faults at 1.00 false dispatches per 1,000 home-days, versus 42.5% at 1.40 for the best simple rule (B1); on validation it matched B1's recall at half the false dispatches. The main value is triage. Limitations are listed in section 8.
 
 ---
 
 ## 1. Problema
 
-Un prosumator are un contor care măsoară doar **diferența** dintre ce ia din rețea și ce trimite în rețea. Dacă panourile se strică, nimeni nu observă imediat: furnizorul vede doar un consum net mai mare. Dar un consum mai mare poate însemna și o piscină nouă, o mașină electrică sau munca de acasă. Dacă fiecare creștere devine o alarmă, echipele de teren sunt inundate cu vizite irosite.
+Un prosumator are un contor care măsoară doar **diferența** dintre ce ia din rețea și ce trimite în rețea. Dacă sistemul solar se defectează (panourile, dar și cablurile, invertorul sau altă componentă), nimeni nu observă imediat: furnizorul vede doar un consum net mai mare. Dar un consum mai mare poate însemna și o piscină nouă, o mașină electrică sau munca de acasă. Dacă fiecare creștere devine o alarmă, echipele de teren sunt inundate cu vizite irosite.
 
 ## 2. Ce face Dimmer
 
@@ -24,7 +24,7 @@ Un prosumator are un contor care măsoară doar **diferența** dintre ce ia din 
 
 4. **Ordonează cazurile** sub o capacitate de K verificări pe săptămână, după un scor (pierdere estimată × parte solară), și generează o explicație în cuvinte pentru fiecare alarmă.
 
-Sistemul **nu** pretinde că dovedește un defect fizic. Spune „merită verificat".
+Sistemul **nu** pretinde că dovedește un defect fizic. Spune „merită verificat". Nici nu spune ce componentă e de vină: o producție lipsă nu înseamnă neapărat panouri de schimbat; cauza poate fi la cabluri, conectori, invertor, siguranțe sau altă componentă, iar asta se stabilește doar la verificarea la fața locului.
 
 ## 3. Rezultate pe scurt (testul final, 2012-07 → 2013-06)
 
@@ -261,8 +261,8 @@ Pe cele 12 case cu scădere reală, Dimmer a alarmat 9 (aceleași ca B1), B1 9, 
 ## 9. Relevanță pentru PPC
 
 Premisa se transferă: la prosumatori, contorul vede importul și exportul, nu producția panourilor. Argumente de business (**de confirmat cu surse oficiale înainte de prezentare**):
-1. furnizorul compensează și trebuie să prognozeze energia livrată de prosumatori; panourile defecte strică prognoza;
-2. clientul cu panouri stricate vede doar o factură mai mare și sună la call center;
+1. furnizorul compensează și trebuie să prognozeze energia livrată de prosumatori; sistemele solare defecte strică prognoza;
+2. clientul cu un sistem solar defect (panouri, cabluri, invertor) vede doar o factură mai mare și sună la call center;
 3. un mesaj proactiv înseamnă client păstrat și, eventual, un serviciu de mentenanță.
 
 ## 10. Direcții de continuare
