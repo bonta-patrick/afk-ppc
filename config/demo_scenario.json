@@ -1,0 +1,57 @@
+{
+  "period": "test",
+  "start": "2012-09-26",
+  "end": "2013-01-23",
+  "days": 120,
+  "sec_per_day": 1.0,
+  "history_from": "2012-07-01",
+  "homes": {
+    "persistent": "234",
+    "temporary": "149",
+    "normal": "251"
+  },
+  "sources": {
+    "persistent": {
+      "data": "real",
+      "kind": "real_decline"
+    },
+    "temporary": {
+      "data": "real",
+      "kind": "clean"
+    },
+    "normal": {
+      "data": "real",
+      "kind": "clean"
+    }
+  },
+  "selection_run": {
+    "persistent": [
+      {
+        "date": "2013-01-05",
+        "action": "CONTACTEAZA",
+        "solar_frac": 2.0
+      }
+    ],
+    "temporary": [
+      {
+        "date": "2012-11-06",
+        "action": "MONITORIZEAZA",
+        "solar_frac": -1.0
+      }
+    ],
+    "normal": []
+  },
+  "rules": {
+    "normal": "casa curata (date reale), fara alarma in fereastra si in cele 28 de zile dinainte; cea mai mica valoare CUSUM maxima",
+    "temporary": "o singura alarma in fereastra, cu actiunea MONITORIZEAZA, intre 20% si 60% din fereastra; preferata o casa curata",
+    "persistent": "casa cu scadere reala de productie (date reale) sau cu defect simulat care incepe in fereastra; prima alarma din fereastra are actiunea CONTACTEAZA, intre 45% si 85% din fereastra; preferate datele reale",
+    "window": "120 zile, dupa cel putin 35 zile de istoric; se alege prima fereastra cu cele trei roluri (preferand date reale)"
+  },
+  "thresholds": {
+    "cusum_h": 40.0,
+    "cusum_k": 0.5,
+    "theta": 0.4,
+    "mode": "raw"
+  },
+  "generated_by": "python src/demo_scenario.py"
+}

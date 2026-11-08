@@ -60,7 +60,7 @@ pip install -r requirements.txt
 python -m streamlit run app/app.py
 ```
 
-Testat cu Python 3.14. Aplicația citește doar din `demo_data/test/` (inclus în repo, câțiva MB) și poate fi folosită în română sau engleză (selectorul RO / EN din dreapta sus). Are cinci secțiuni: ce face Dimmer, un caz pe larg (cu butonul „Arată adevărul"), coada de verificări cu slider de capacitate, episoadele reale și tabelele de rezultate.
+Testat cu Python 3.14. Aplicația citește din `demo_data/test/` (inclus în repo, câțiva MB; doar pagina „Demo live” are nevoie în plus de `data/processed/` și `models/`, vezi 4.4) și poate fi folosită în română sau engleză (selectorul RO / EN din dreapta sus). Are șase secțiuni: ce face Dimmer, demo-ul live (secțiunea 4.4), un caz pe larg (cu butonul „Arată adevărul"), coada de verificări cu slider de capacitate, episoadele reale și tabelele de rezultate.
 
 ### 4.2 Lanțul complet, de la date brute
 
@@ -95,6 +95,45 @@ Opțional: `python src/train_eval.py --period val --peer on` (ablația „ajusta
 **Notă.** `config/faults.json` (creat automat) presupune cel puțin ~100 de case eligibile (10 defecte × 4 tipuri + 5 consumuri × 4 tipuri). Pentru un set mai mic, reduceți `n_per_type` și `n_load_per_type`.
 
 Dacă `streamlit` nu e recunoscut în PowerShell, folosiți `python -m streamlit`.
+
+### 4.4 Demo live: date istorice, redare accelerată, procesare live
+
+Pagina **Demo live** din aplicație trimite, zi cu zi, anul de test prin lanțul real: modelul LightGBM `full` deja antrenat (încărcat o singură dată), CUSUM-ul cu pragul înghețat (h = 40), verificarea soare/consum (θ = 0,4), prioritatea din triaj și ciorna mesajului din `src/messages.py`. Nu se reantrenează nimic, nu se schimbă praguri și nu se scrie nimic pe disc.
+
+**Pornire** (are nevoie de datele brute din `data/raw/` și de `models/`, vezi secțiunea 5):
+
+```bash
+python src/prepare.py                    # data/processed/ (scrie doar acolo)
+python src/simulate.py --period test     # copia de test cu defectele simulate ale evaluării oficiale
+python src/demo_scenario.py              # alege scenariul rulând pipeline-ul -> config/demo_scenario.json
+python src/check_replay.py               # opțional: verificările de mai jos (~15 s)
+python -m streamlit run app/app.py       # apoi pagina „Demo live” → Start
+```
+
+**Cum funcționează.** Un pas = o zi completă, pentru că modelul decide pe zile (media zilnică a abaterii pe orele 8–17, CUSUM zilnic); nu există decizii la 30 de minute. La ziua D se folosesc doar citirile nete ale zilei D, consumul de noapte din cele 28 de zile **anterioare**, radiația zilei D și starea acumulată până atunci. Data simulată și timpul real sunt afișate separat. Controale: Start, Pauză / Continuare, Reset și viteza (2 s … 0,1 s pe zi simulată). Un singur fir de execuție pe sesiune: un al doilea Start este refuzat, iar dacă o zi durează mai mult decât intervalul ales, următoarea pornește după ea (pașii nu se suprapun). Reset oprește execuția și golește doar starea demo (progres, evenimente, cazuri, deduplicare).
+
+**Acțiuni automate.** O alarmă CONTACTEAZĂ din fereastra demo deschide un caz `DEMO-nnn` cu dovezile calculate (CUSUM la alarmă, zile cu date, citiri lipsă, abaterea medie, partea solară, motivul deciziei), prioritatea din triaj (pierdere estimată × parte solară, kWh/zi; nu e o probabilitate) și o notificare în **inboxul demo**. Gruparea incidentelor e regula existentă din `triage.py`: o casă are cel mult un caz deschis, iar alarmele noi se atașează la el fără o notificare nouă. Proiectul nu are niciun destinatar de test configurat, deci nimic nu pleacă din aplicație. Cazurile demo trăiesc doar în memoria sesiunii, separat de datele aplicației.
+
+**Estimarea financiară** (în RON, la 1,30 lei/kWh din `config/economics.json`). *Pierderea acumulată* = pierderea solară estimată pe zi (abatere × parte solară, regula din `messages.py`) × zilele cu date din fereastra de dovezi. Fiecare zi se numără o singură dată, chiar dacă alarmele se suprapun. *Proiecția* pe 30 de zile e afișată separat și nu se adună la pierderea acumulată. Graficul arată netul observat și netul estimat de model, nu producția: contorul nu vede producția.
+
+**Datele și separarea.** Modelul e antrenat pe 2010-07 → 2011-06 (`config/split.json`, `src/train_eval.py --period train`). Replay-ul folosește anul de test 2012-07 → 2013-06, adică aceeași copie `data/processed/sim/test/net_faulty.parquet` ca evaluarea oficială: date Ausgrid reale, plus defectele și consumurile simulate de `src/simulate.py` pe 60 de case. Aceste case sunt etichetate vizibil „Anomalie simulată” în aplicație. Datele originale nu se modifică. Înainte de fereastra demo, istoricul de la 2012-07-01 trece prin același lanț fără acțiuni, ca CUSUM-ul să pornească din aceeași stare ca rularea obișnuită.
+
+**Scenariul ales** (`python src/demo_scenario.py`, 120 de zile ≈ 2 minute la 1 s/zi; se schimbă cu `--days` și `--sec-per-day`): fereastra 2012-09-26 → 2013-01-23, toate trei casele cu **date reale, nemodificate**:
+1. *funcționare normală*: casa 251, nicio alarmă;
+2. *abatere păstrată în monitorizare*: casa 149, alarmă pe 2012-11-06, dar abaterea nu urmărește soarele, deci acțiunea e MONITORIZEAZĂ: fără caz, fără notificare, fără alte alarme în fereastră. Abaterea nu dispare din date (netul rămâne peste estimare), deci e o abatere respinsă de verificare, nu una care se stinge singură;
+3. *subperformanță persistentă*: casa 234, a cărei producție a scăzut real (cauză necunoscută); alarmă pe 2013-01-05 → CONTACTEAZĂ → caz și notificare.
+
+Scriptul alege după rezultatele pipeline-ului, nu după rezultate scrise de mână, iar în aplicație totul se recalculează live. Pentru rolul 3 sunt excluse casele curate, pentru că acolo un CONTACTEAZĂ e o alarmă falsă. Nu a fost nevoie de nicio anomalie injectată suplimentar. În aceeași fereastră, pe toate cele 297 de case apar și alte cazuri, inclusiv pe case cu defecte simulate și alarme false pe case curate: sunt afișate așa cum ies din pipeline.
+
+**Verificări** (`python src/check_replay.py`, 33 de verificări):
+- replay-ul zi cu zi dă aceleași valori z, alarme, acțiuni și părți solare ca rularea obișnuită pe tot anul și ca `demo_data/test/decisions.csv` (454 de alarme);
+- o zi nu depinde de datele de după ea;
+- Start / Pauză / Continuare / Reset, inclusiv porniri simultane, funcționează fără pași suprapuși;
+- nu apar cazuri sau notificări duplicate, iar pierderea nu numără aceleași zile de două ori;
+- zilele cu citiri lipsă și o eroare într-un pas sunt tratate fără să oprească aplicația;
+- explicațiile se generează în română și engleză.
+
+**Limite.** Demo-ul are nevoie de `data/processed/` și `models/` (nu sunt în repo), deci nu rulează direct după `git clone`, ca restul aplicației. Starea demo e per sesiune de browser și se pierde la reîncărcarea serverului. Inspecțiile din teren nu sunt simulate, așa că un caz rămâne deschis până la Reset.
 
 ## 5. Date
 
@@ -261,6 +300,9 @@ afk-ppc/
     inspect_misses.py    # analiza erorilor pe SNR
     messages.py          # ciorna mesajului către client (RO / EN)
     make_demo_data.py    # pregătește demo_data/
+    demo_replay.py       # demo live: replay zi cu zi prin lanțul real, cazuri și inbox demo
+    demo_scenario.py     # alege scenariul demo rulând pipeline-ul -> config/demo_scenario.json
+    check_replay.py      # verificările modului demo
     download_solar_radiation.py  # descarcă radiația de la Open-Meteo
     check_test.py, check_zero.py, inspect_raw.py  # verificări ajutătoare
   data/  models/         # generate local, nu sunt în repo

@@ -10,6 +10,7 @@ import html
 import io
 import json
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
@@ -19,11 +20,13 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import streamlit as st
 import streamlit.components.v1 as components
+import altair as alt
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 from triage import run_queue, metrics  # noqa: E402
 from messages import customer_message, explain_alert  # noqa: E402
+import demo_replay as DR  # noqa: E402
 
 DEMO = ROOT / "demo_data" / "test"
 st.set_page_config(page_title="Dimmer", layout="wide", initial_sidebar_state="collapsed")
@@ -51,7 +54,7 @@ POLICIES = {"b1_fifo": ("B1 (regulă simplă), în ordinea sosirii", "B1 (simple
             "b1_cap": ("B1, după capacitatea instalată", "B1, by installed capacity"),
             "model_all": ("Model, toate alarmele, după pierderea estimată", "Model, all alerts, by estimated loss"),
             "dimmer": ("Dimmer: model + decizie, după scor", "Dimmer: model + decision, by score")}
-PAGE_KEYS = ["overview", "cases", "queue", "real", "results"]
+PAGE_KEYS = ["overview", "demo", "cases", "queue", "real", "results"]
 
 
 def t(key, **kw):
@@ -188,6 +191,32 @@ div[data-baseweb="select"] > div { border-radius:12px; }
 .st-key-lang label[data-baseweb="radio"] p { font-size:.8rem; font-weight:700; letter-spacing:.06em; color:#6e6e73; margin:0; }
 .st-key-lang label[data-baseweb="radio"]:has(input:checked) { background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.14); }
 .st-key-lang label[data-baseweb="radio"]:has(input:checked) p { color:#1d1d1f; }
+
+.dm-banner { display:inline-flex; align-items:center; gap:.55rem; padding:.36rem .95rem; border-radius:999px; background:#1d1d1f; color:#f5f5f7;
+  font-size:.78rem; font-weight:600; letter-spacing:.04em; margin:.2rem 0 1.1rem 0; }
+.dm-dot { width:8px; height:8px; border-radius:50%; background:#8e8e93; flex:none; }
+.dm-dot.on { background:#ff9f0a; animation:pulse 1.8s ease-in-out infinite; }
+.dm-big { font-size:1.9rem; font-weight:700; letter-spacing:-.04em; font-variant-numeric:tabular-nums; line-height:1.1; }
+.dm-lbl { font-size:.72rem; text-transform:uppercase; letter-spacing:.12em; color:#86868b; font-weight:700; margin-bottom:.25rem; }
+.dm-sm { font-size:.8rem; color:#86868b; margin-top:.25rem; line-height:1.45; }
+.dm-track { height:6px; border-radius:99px; background:#ececf0; overflow:hidden; margin:.55rem 0 .2rem 0; }
+.dm-fill { height:100%; border-radius:99px; background:linear-gradient(90deg,#ffd166,#ff9f0a); transition:width .4s var(--ease); }
+.dm-fill.over { background:#d70015; }
+.dm-state { display:inline-block; padding:.3rem .85rem; border-radius:999px; font-size:.82rem; font-weight:700; color:#fff; margin:.15rem 0 .5rem 0; }
+.s-wait { background:#c7c7cc; } .s-monitor { background:#1a9e5c; } .s-almon { background:#c77700; } .s-aldata { background:#8e8e93; } .s-invest { background:#d70015; }
+.tag { display:inline-block; padding:.12rem .55rem; border-radius:6px; font-size:.7rem; font-weight:700; letter-spacing:.03em; white-space:nowrap; }
+.tag-real { background:#eef7f1; color:#1a7a48; } .tag-sim { background:#fff1e0; color:#a35a00; border:1px dashed #e0a050; }
+.feed { max-height:560px; overflow-y:auto; padding-right:.3rem; }
+.ev { display:grid; grid-template-columns:12px 92px 1fr; gap:.55rem; padding:.55rem .2rem; border-top:1px solid rgba(0,0,0,.06); font-size:.84rem; line-height:1.5; }
+.ev-dot { width:8px; height:8px; border-radius:50%; margin-top:.45rem; background:#c7c7cc; }
+.ev-d { color:#86868b; font-variant-numeric:tabular-nums; font-size:.76rem; line-height:1.35; }
+.ev-t { color:#2c2c2e; }
+.k-alarm { background:#ff9f0a; } .k-contact { background:#d70015; } .k-monitor { background:#c77700; } .k-data { background:#8e8e93; }
+.k-case { background:#d70015; box-shadow:0 0 0 3px rgba(215,0,21,.15); } .k-notif { background:#1d1d1f; } .k-err { background:#d70015; }
+.ev-new { animation:rise .6s var(--ease) both; }
+.ev-tbl { width:100%; border-collapse:collapse; font-size:.86rem; }
+.ev-tbl td { padding:.42rem .3rem; border-top:1px solid rgba(0,0,0,.06); vertical-align:top; }
+.ev-tbl td:first-child { color:#6e6e73; width:44%; }
 </style>
 """
 
@@ -524,6 +553,139 @@ TX = {
                   "• The data is from Australia (Ausgrid, 2010-2013); the method transfers, the numbers do not.<br>"
                   "• We have not confirmed physical faults; we say “worth checking”, not “is faulty”."),
 }
+
+
+# --- demo live (redare accelerata a datelor istorice, procesare prin lantul real)
+TX.update({
+    "nav_demo": ("Demo live", "Live demo"),
+    "dm_eye": ("Demo", "Demo"),
+    "dm_title": ("Dimmer, zi cu zi, pe date istorice", "Dimmer, day by day, on historical data"),
+    "dm_sub": ("Fiecare zi din anul de test trece, pe rând, prin același lanț ca rularea obișnuită: modelul LightGBM antrenat (încărcat o singură dată), "
+               "dovezile CUSUM, verificarea soare/consum, triajul și mesajul. Nimic nu e precalculat: ce vedeți mai jos se calculează acum.",
+               "Each day of the test year goes, in turn, through the same chain as the regular run: the trained LightGBM model (loaded once), "
+               "the CUSUM evidence, the sun/consumption check, triage and the message. Nothing is precomputed: what you see below is being computed now."),
+    "dm_banner": ("Date istorice · redare accelerată · procesare live", "Historical data · accelerated replay · live processing"),
+    "dm_missing": ("Modul demo are nevoie de datele procesate și de modelul antrenat ({m}). Rulați lanțul (README, secțiunea 4.4): "
+                   "`python src/prepare.py`, `python src/simulate.py --period test`, apoi `python src/demo_scenario.py`.",
+                   "The demo mode needs the processed data and the trained model ({m}). Run the chain (README, section 4.4): "
+                   "`python src/prepare.py`, `python src/simulate.py --period test`, then `python src/demo_scenario.py`."),
+    "dm_noscen": ("Lipsește config/demo_scenario.json. Rulați: `python src/demo_scenario.py`",
+                  "config/demo_scenario.json is missing. Run: `python src/demo_scenario.py`"),
+    "dm_start": ("Start", "Start"), "dm_pause": ("Pauză", "Pause"), "dm_resume": ("Continuare", "Resume"), "dm_reset": ("Reset", "Reset"),
+    "dm_speed": ("Viteză", "Speed"), "dm_speed_f": ("{s} s / zi simulată", "{s} s / simulated day"),
+    "dm_st_idle": ("Gata de pornire", "Ready"), "dm_st_warming": ("Se procesează istoricul anterior", "Processing the earlier history"),
+    "dm_st_running": ("Rulează", "Running"), "dm_st_paused": ("În pauză", "Paused"), "dm_st_finished": ("Terminat", "Finished"),
+    "dm_st_error": ("Eroare", "Error"),
+    "dm_simdate": ("Data simulată", "Simulated date"), "dm_simnote": ("ultima zi completă procesată", "last full day processed"),
+    "dm_real": ("Timp real", "Real time"), "dm_realnote": ("scurs de la Start, fără pauze", "since Start, excluding pauses"),
+    "dm_prog": ("Ziua {a} din {b}", "Day {a} of {b}"),
+    "dm_stepms": ("ultimul pas: {ms} ms pentru o zi", "last step: {ms} ms for one day"),
+    "dm_overrun": (" · {n} pași mai lungi decât intervalul, rulați unul după altul", " · {n} steps longer than the interval, run one after another"),
+    "dm_window": ("Fereastra demo: {a} → {b} ({n} zile). Înainte, istoricul {c} → {d} trece prin același lanț, fără acțiuni, ca CUSUM-ul să pornească din aceeași stare ca rularea obișnuită.",
+                  "Demo window: {a} → {b} ({n} days). Before it, the history {c} → {d} goes through the same chain, without actions, so CUSUM starts from the same state as in the regular run."),
+    "dm_k_days": ("Zile procesate", "Days processed"), "dm_k_al": ("Alarme CUSUM", "CUSUM alerts"),
+    "dm_k_cases": ("Cazuri create", "Cases created"), "dm_k_notif": ("Notificări", "Notifications"),
+    "dm_k_fleet": ("în fereastră, pe toate cele {n} instalații", "in the window, across all {n} installations"),
+    "dm_scen": ("Scenariul", "Scenario"),
+    "dm_scen_p": ("Ales de src/demo_scenario.py după rezultatele pipeline-ului pe anul de test (reguli în config/demo_scenario.json). În demo, totul se recalculează.",
+                  "Chosen by src/demo_scenario.py from the pipeline's results on the test year (rules in config/demo_scenario.json). In the demo, everything is recomputed."),
+    "role_normal": ("Funcționare normală", "Normal operation"),
+    "role_temporary": ("Abatere păstrată în monitorizare", "Deviation kept under monitoring"),
+    "role_persistent": ("Subperformanță persistentă", "Persistent underperformance"),
+    "src_real": ("Date reale, nemodificate", "Real data, unmodified"),
+    "src_real_decline": ("Date reale · producția a scăzut real (cauză necunoscută)", "Real data · production really dropped (unknown cause)"),
+    "src_sim_fault": ("Anomalie simulată · {k} din {d}", "Simulated anomaly · {k} from {d}"),
+    "src_sim_load": ("Anomalie simulată · {k} din {d} (panourile funcționează)", "Simulated anomaly · {k} from {d} (panels work)"),
+    "src_hidden": ("Proveniența datelor e afișată pentru prezentare; pipeline-ul nu o vede.", "Data provenance is shown for the presentation; the pipeline does not see it."),
+    "dm_track": ("Instalația urmărită", "Tracked installation"),
+    "dm_home_opt": ("casa {h} · {r}", "home {h} · {r}"),
+    "dm_home_case": ("casa {h} · caz {c}", "home {h} · case {c}"),
+    "dm_state": ("Starea instalației", "Installation state"),
+    "st_wait": ("În așteptare", "Waiting"),
+    "st_monitor": ("Monitorizare", "Monitoring"),
+    "st_al_monitor": ("Abatere detectată · păstrată în monitorizare", "Deviation detected · kept under monitoring"),
+    "st_al_data": ("Abatere detectată · date de verificat", "Deviation detected · data to check"),
+    "st_invest": ("Investigație recomandată", "Investigation recommended"),
+    "st_n_wait": ("Fereastra demo nu a început încă.", "The demo window has not started yet."),
+    "st_n_monitor": ("Nicio alarmă în ultimele 14 zile; dovezile CUSUM sunt sub prag.", "No alert in the last 14 days; the CUSUM evidence is below the threshold."),
+    "st_n_after": ("Alarmă pe {d}; verificarea a decis: {a}. Nicio alarmă nouă timp de 14 zile.", "Alert on {d}; the check decided: {a}. No new alert for 14 days."),
+    "st_n_case": ("Cazul {c} este deschis din {d}. Merită verificat; nu e un defect confirmat.", "Case {c} has been open since {d}. Worth checking; not a confirmed fault."),
+    "dm_cusum": ("Dovezi acumulate (CUSUM)", "Accumulated evidence (CUSUM)"),
+    "dm_cusum_n": ("{s} din pragul {h}. Nu este o probabilitate: suma abaterilor zilnice standardizate, minus {k} pe zi. La depășirea pragului apare o alarmă, apoi suma revine la 0.",
+                   "{s} of the threshold {h}. Not a probability: the sum of standardised daily deviations, minus {k} per day. Crossing the threshold raises an alert, then the sum resets to 0."),
+    "dm_ztoday": ("Abaterea standardizată a zilei: z = {z}", "Standardised deviation of the day: z = {z}"),
+    "dm_ch_obs": ("net observat", "observed net"), "dm_ch_exp": ("net estimat de model", "model-estimated net"),
+    "dm_ch_y": ("kWh pe oră (net, orele 8-17)", "kWh per hour (net, hours 8-17)"),
+    "dm_ch_note": ("Valori zilnice până la data simulată. Contorul vede doar netul (consum − producție), nu producția: un net mai mare decât cel estimat poate însemna producție lipsă sau consum nou. Punctele sunt alarmele, colorate după acțiune.",
+                   "Daily values up to the simulated date. The meter only sees net (consumption − production), not production: a net higher than estimated may mean missing production or a new load. Dots are alerts, coloured by action."),
+    "dm_feed": ("Activitate", "Activity"), "dm_feed_all": ("Toate instalațiile", "All installations"),
+    "dm_feed_none": ("Încă niciun eveniment. Apăsați Start.", "No events yet. Press Start."),
+    "ev_warmup": ("Istoric procesat {a} → {b}: {n} zile prin același lanț, {al} alarme, fără acțiuni ({s} s).",
+                  "History processed {a} → {b}: {n} days through the same chain, {al} alerts, no actions ({s} s)."),
+    "ev_started": ("Începe fereastra demo. Acțiunile automate sunt active.", "The demo window starts. Automatic actions are on."),
+    "ev_paused": ("Pauză.", "Paused."), "ev_resumed": ("Continuare.", "Resumed."),
+    "ev_finished": ("Fereastra demo s-a încheiat: {n} zile procesate.", "The demo window has ended: {n} days processed."),
+    "ev_error": ("Eroare: {m}. Replay-ul s-a oprit; nimic nu a fost scris pe disc.", "Error: {m}. The replay stopped; nothing was written to disk."),
+    "ev_missing": ("Casa {h}: {p}% din citirile de zi lipsesc.", "Home {h}: {p}% of daytime readings are missing."),
+    "ev_missing_fleet": ("{p}% din citirile zilei lipsesc în toată rețeaua.", "{p}% of the day's readings are missing across the network."),
+    "ev_alarm": ("Casa {h}: dovezile CUSUM au trecut de prag ({s} > {hh}). Abatere detectată; urmează verificarea soare/consum.",
+                 "Home {h}: CUSUM evidence crossed the threshold ({s} > {hh}). Deviation detected; the sun/consumption check follows."),
+    "ev_check": ("Verificare, casa {h} → {a}. {x}", "Check, home {h} → {a}. {x}"),
+    "ev_no_case": ("Casa {h}: {a}. Nu se deschide caz, nu pleacă nicio notificare.", "Home {h}: {a}. No case is opened, no notification is sent."),
+    "ev_case_created": ("Caz {c} creat automat pentru casa {h} · prioritate {p} kWh/zi.", "Case {c} created automatically for home {h} · priority {p} kWh/day."),
+    "ev_case_updated": ("Casa {h} are deja cazul {c} deschis: alarma nouă e atașată, prioritatea devine {p} kWh/zi.",
+                        "Home {h} already has case {c} open: the new alert is attached, priority becomes {p} kWh/day."),
+    "ev_case_evidence": ("Casa {h}: alarma ({a}) e atașată la cazul deschis {c}.", "Home {h}: the alert ({a}) is attached to open case {c}."),
+    "ev_notification": ("Notificare pentru {c} în inboxul demo (netrimisă).", "Notification for {c} in the demo inbox (not sent)."),
+    "ev_notif_dedup": ("Casa {h}: notificarea pentru {c} există deja; nu se trimite din nou.", "Home {h}: the notification for {c} already exists; it is not sent again."),
+    "dm_cases": ("Cazuri create în demo", "Cases created in the demo"),
+    "dm_cases_sub": ("Izolate de datele aplicației: există doar în memoria acestei sesiuni, iar Reset le șterge. Ordonate după prioritatea din triaj "
+                     "(pierdere estimată × parte solară, în kWh/zi; nu este o probabilitate). O casă are cel mult un caz deschis; alarmele noi se atașează la el.",
+                     "Isolated from the app's data: they exist only in this session's memory, and Reset deletes them. Ordered by the triage priority "
+                     "(estimated loss × solar share, in kWh/day; not a probability). A home has at most one open case; new alerts are attached to it."),
+    "dm_cases_none": ("Niciun caz încă.", "No cases yet."),
+    "c_id": ("Caz", "Case"), "c_home": ("Casa", "Home"), "c_open": ("Deschis", "Opened"), "c_src": ("Proveniența datelor", "Data provenance"),
+    "c_prio": ("Prioritate (kWh/zi)", "Priority (kWh/day)"), "c_loss": ("Pierdere estimată acumulată (kWh)", "Estimated accumulated loss (kWh)"),
+    "c_cost": ("≈ valoare ({cur})", "≈ value ({cur})"), "c_n": ("Alarme", "Alerts"),
+    "c_pick": ("Explicația și raportul pentru", "Explanation and report for"),
+    "c_expl": ("Explicație", "Explanation"),
+    "c_evid": ("Dovezi calculate", "Computed evidence"),
+    "e_date": ("Data alarmei", "Alert date"), "e_cusum": ("CUSUM la alarmă / prag", "CUSUM at alert / threshold"),
+    "e_days": ("Zile cu date în fereastra de 28", "Days with data in the 28-day window"), "e_miss": ("Citiri de zi lipsă", "Missing daytime readings"),
+    "e_exc": ("Abatere medie la orele de zi", "Mean daytime deviation"), "e_sun": ("Parte solară (cât din abatere crește cu soarele)", "Solar share (how much of the deviation rises with the sun)"),
+    "e_rule": ("Motivul deciziei", "Reason for the decision"),
+    "e_exc_v": ("{x} kWh/oră · {y} kWh/zi", "{x} kWh/hour · {y} kWh/day"),
+    "rule_data_miss": ("{p}% citiri lipsă > 20% → VERIFICĂ DATELE", "{p}% missing readings > 20% → CHECK DATA"),
+    "rule_data_few": ("doar {n} zile cu date < 14 → VERIFICĂ DATELE", "only {n} days with data < 14 → CHECK DATA"),
+    "rule_flat": ("soarele a variat prea puțin în fereastră → MONITORIZEAZĂ", "the sun varied too little in the window → MONITOR"),
+    "rule_small": ("abatere medie prea mică pentru a calcula partea solară → MONITORIZEAZĂ", "mean deviation too small to compute the solar share → MONITOR"),
+    "rule_contact": ("parte solară {s} ≥ prag {t} → CONTACTEAZĂ (investigație recomandată)", "solar share {s} ≥ threshold {t} → CONTACT (investigation recommended)"),
+    "rule_monitor": ("parte solară {s} < prag {t} → MONITORIZEAZĂ", "solar share {s} < threshold {t} → MONITOR"),
+    "c_money": ("Estimare financiară", "Financial estimate"),
+    "c_acc": ("Pierdere acumulată estimată: {k} kWh ≈ {v} {cur}", "Estimated accumulated loss: {k} kWh ≈ {v} {cur}"),
+    "c_acc_n": ("Perioada: {a} → {b}, {n} zile cu date, fiecare zi numărată o singură dată chiar dacă alarmele se suprapun. Tarif: {p} {cur}/kWh (config/economics.json; prețul plătit de client).",
+                "Period: {a} → {b}, {n} days with data, each day counted once even when alerts overlap. Tariff: {p} {cur}/kWh (config/economics.json; the price paid by the customer)."),
+    "c_proj": ("Proiecție, neinclusă mai sus: ~{k} kWh/zi → ~{v} {cur} în următoarele 30 de zile, dacă abaterea se menține.",
+               "Projection, not included above: ~{k} kWh/day → ~{v} {cur} over the next 30 days, if the deviation persists."),
+    "c_noloss": ("Pierderea solară nu se poate estima pentru acest caz.", "The solar loss cannot be estimated for this case."),
+    "c_disc": ("Indiciu că lipsește producția solară, nu un defect confirmat: doar o verificare la fața locului îl poate confirma.",
+               "An indication that solar production is missing, not a confirmed fault: only an on-site check can confirm it."),
+    "c_report": ("Descarcă raportul (.md)", "Download the report (.md)"),
+    "c_timeline": ("Alarmele cazului", "The case's alerts"),
+    "dm_inbox": ("Inbox demo", "Demo inbox"),
+    "dm_inbox_sub": ("Notificările sunt generate de mecanismul existent (ciorna mesajului către client din src/messages.py), una pe caz. "
+                     "Rămân aici: proiectul nu are niciun destinatar de test configurat, deci nimic nu pleacă din aplicație. Un operator le adaptează și le aprobă.",
+                     "Notifications are generated by the existing mechanism (the customer message draft from src/messages.py), one per case. "
+                     "They stay here: the project has no test recipient configured, so nothing leaves the app. An operator adapts and approves them."),
+    "dm_inbox_none": ("Inboxul e gol.", "The inbox is empty."),
+    "dm_notif_h": ("{n} · {c} · casa {h} · {d}", "{n} · {c} · home {h} · {d}"),
+    "dm_unsent": ("DEMO · netrimisă · de aprobat de un operator", "DEMO · not sent · to be approved by an operator"),
+    "dm_inbox_more": ("Sunt afișate ultimele {a} din {b} notificări.", "Showing the latest {a} of {b} notifications."),
+    "dm_err": ("Replay-ul s-a oprit cu o eroare: {m}. Apăsați Reset.", "The replay stopped with an error: {m}. Press Reset."),
+    "rep_title": ("Raport de caz (DEMO)", "Case report (DEMO)"),
+    "rep_banner": ("Date istorice · redare accelerată · procesare live. Caz demonstrativ, nu un caz real al aplicației.",
+                   "Historical data · accelerated replay · live processing. Demonstration case, not a real case of the app."),
+})
 
 
 def check_tx():
@@ -1215,6 +1377,412 @@ def page_results():
     md(f'<div class="note">{t("rs_l_note")}</div>')
 
 
+# ================================================================== DEMO LIVE (src/demo_replay.py)
+DEMO_LIVE = ("warming", "running")
+ROLES = ["normal", "temporary", "persistent"]
+STATE_CLS = {"st_wait": "s-wait", "st_monitor": "s-monitor", "st_al_monitor": "s-almon", "st_al_data": "s-aldata", "st_invest": "s-invest"}
+
+
+@st.cache_resource(show_spinner=False)
+def demo_core():
+    """Datele si modelul, incarcate o singura data (pentru tot serverul)."""
+    return DR.ReplayCore()
+
+
+def demo_runner(core, scen):
+    r = st.session_state.get("demo_runner")
+    if r is None or r.core is not core or r.scenario != scen:
+        if r is not None:
+            r.reset()
+        r = DR.ReplayRunner(core, scen, ECON)
+        st.session_state["demo_runner"] = r
+    return r
+
+
+def cur_label():
+    c = ECON.get("currency", "RON")
+    return "lei" if (c == "RON" and LANG == "ro") else c
+
+
+def src_tag(h):
+    """Proveniența datelor casei (pentru prezentare; pipeline-ul nu o vede)."""
+    if h in lab.index:
+        r = lab.loc[h]
+        k = "src_sim_fault" if r["kind"] == "fault" else "src_sim_load"
+        return t(k, k=kind(r["type"]), d=f"{pd.Timestamp(r['start']):%Y-%m-%d}"), "tag-sim"
+    if h in real_homes:
+        return t("src_real_decline"), "tag-real"
+    return t("src_real"), "tag-real"
+
+
+def tag_html(h):
+    txt, cls = src_tag(h)
+    return f'<span class="tag {cls}">{esc(txt)}</span>'
+
+
+def pct(x):
+    return fmt(100 * x, 0) if pd.notna(x) else "—"
+
+
+def decision_reason(r, theta):
+    """Motivul deciziei, cu aceleasi reguli ca decide.assign."""
+    miss, note, sf = r.get("missing", np.nan), r.get("note", ""), r.get("solar_frac", np.nan)
+    if pd.notna(miss) and miss > DR.dc.MISSING_MAX:
+        return t("rule_data_miss", p=pct(miss))
+    if note == "few_days":
+        return t("rule_data_few", n=int(r["n_days"]))
+    if note == "flat_sun":
+        return t("rule_flat")
+    if note == "small_excess" or pd.isna(sf):
+        return t("rule_small")
+    key = "rule_contact" if sf >= theta else "rule_monitor"
+    return t(key, s=fmt(min(max(sf, 0.0), 1.0), 2), t=fmt(theta, 1))
+
+
+def ev_class(e):
+    k = e["kind"]
+    if k == "alarm":
+        return "k-alarm"
+    if k == "check":
+        return {"CONTACTEAZA": "k-contact", "MONITORIZEAZA": "k-monitor"}.get(e["row"]["action"], "k-data")
+    if k in ("case_created", "case_updated", "case_evidence"):
+        return "k-case"
+    if k in ("notification", "notif_dedup"):
+        return "k-notif"
+    if k == "error":
+        return "k-err"
+    return ""
+
+
+def ev_text(e):
+    k, h = e["kind"], e.get("home")
+    d = lambda x: f"{pd.Timestamp(x):%Y-%m-%d}"
+    if k == "warmup":
+        return t("ev_warmup", a=d(e["first"]), b=d(e["sim_date"]), n=e["n_days"], al=e["alarms"], s=fmt(e["seconds"], 1))
+    if k in ("started", "paused", "resumed"):
+        return t("ev_" + k)
+    if k == "finished":
+        return t("ev_finished", n=e["n_days"])
+    if k == "error":
+        return t("ev_error", m=e["message"])
+    if k == "missing":
+        return t("ev_missing", h=h, p=pct(e["frac"]))
+    if k == "missing_fleet":
+        return t("ev_missing_fleet", p=pct(e["frac"]))
+    if k == "alarm":
+        return t("ev_alarm", h=h, s=fmt(e["cusum"], 1), hh=fmt(e["h"], 0))
+    if k == "check":
+        r = e["row"]
+        return t("ev_check", h=h, a=action_label(r["action"]), x=explain_alert(r, LANG))
+    if k == "no_case":
+        return t("ev_no_case", h=h, a=action_label(e["action"]))
+    if k == "case_created":
+        return t("ev_case_created", c=e["case_id"], h=h, p=fmt(e["priority"], 2))
+    if k == "case_updated":
+        return t("ev_case_updated", c=e["case_id"], h=h, p=fmt(e["priority"], 2))
+    if k == "case_evidence":
+        return t("ev_case_evidence", c=e["case_id"], h=h, a=action_label(e["action"]))
+    if k == "notification":
+        return t("ev_notification", c=e["case_id"])
+    if k == "notif_dedup":
+        return t("ev_notif_dedup", c=e["case_id"], h=h)
+    return k
+
+
+def home_state(snap, h):
+    """Starea curenta, derivata doar din ce a produs pipeline-ul pana la data simulata."""
+    if not snap["in_window"]:
+        return "st_wait", t("st_n_wait")
+    case = snap["cases"].get(h)
+    if case is not None:
+        return "st_invest", t("st_n_case", c=case["id"], d=f"{case['opened']:%Y-%m-%d}")
+    evs = [r for r in snap["decisions"] if r["home"] == h and r["i"] >= snap["start_i"]]
+    if evs and snap["i_last"] - evs[-1]["i"] < DR.COOLDOWN_DAYS:
+        r = evs[-1]
+        key = "st_al_data" if r["action"] == "VERIFICA_DATE" else "st_al_monitor"
+        return key, t("st_n_after", d=f"{r['date']:%Y-%m-%d}", a=action_label(r["action"]))
+    return "st_monitor", t("st_n_monitor")
+
+
+def demo_snapshot(runner):
+    with runner.lock:
+        S = runner.session
+        j0, j1 = S.start_i, max(S.start_i, S.i_next)
+        return {"status": runner.status, "error": runner.error, "i_next": S.i_next, "i_last": S.i_next - 1,
+                "start_i": S.start_i, "end_i": S.end_i, "in_window": S.i_next > S.start_i,
+                "feed": list(S.feed), "decisions": list(S.decisions),
+                "cases": {h: dict(c, events=list(c["events"])) for h, c in S.cases.items()},
+                "notifications": list(S.notifications),
+                "obs": S.obs[j0:j1].copy(), "exp": S.exp[j0:j1].copy(), "s": S.sh[max(0, S.i_next - 1)].copy(),
+                "z": S.zh[max(0, S.i_next - 1)].copy(), "step_ms": S.step_ms[-1] if S.step_ms else None,
+                "elapsed": runner.elapsed(), "overruns": runner.overruns, "speed": runner.sec_per_day}
+
+
+def demo_chart(core, snap, h, scen):
+    j = core.cols.index(h)
+    days = core.days[snap["start_i"]:snap["start_i"] + len(snap["obs"])]
+    lo, hi = core.days[snap["start_i"]], core.days[snap["end_i"]]
+    obs, exp = snap["obs"][:, j], snap["exp"][:, j]
+    n_obs, n_exp = t("dm_ch_obs"), t("dm_ch_exp")
+    long = pd.concat([pd.DataFrame({"date": days, "v": obs, "s": n_obs}), pd.DataFrame({"date": days, "v": exp, "s": n_exp})])
+    x = alt.X("date:T", scale=alt.Scale(domain=[lo.isoformat(), hi.isoformat()]), title=None,
+              axis=alt.Axis(format="%Y-%m-%d", labelColor=MUTED, tickColor=LINE, domainColor=LINE, grid=False))
+    vals = np.concatenate([obs[np.isfinite(obs)], exp[np.isfinite(exp)]]) if len(days) else np.array([])
+    ydom = [float(np.min(vals)) - 0.1, float(np.max(vals)) + 0.1] if len(vals) else [-1.0, 1.0]
+    y = alt.Y("v:Q", title=t("dm_ch_y"), scale=alt.Scale(domain=ydom),
+              axis=alt.Axis(labelColor=MUTED, titleColor=MUTED, gridColor="#efeff4", domainColor=LINE, tickColor=LINE))
+    gap = pd.DataFrame({"date": days, "lo": exp, "hi": np.where(obs > exp, obs, exp)})
+    area = alt.Chart(gap).mark_area(color=GOLD, opacity=0.22).encode(x=x, y=alt.Y("lo:Q", scale=alt.Scale(domain=ydom)), y2="hi:Q")
+    lines = alt.Chart(long).mark_line(strokeWidth=1.7).encode(
+        x=x, y=y,
+        color=alt.Color("s:N", scale=alt.Scale(domain=[n_obs, n_exp], range=[INK, MUTED]),
+                        legend=alt.Legend(title=None, orient="top", labelColor=INK, symbolStrokeWidth=2)),
+        strokeDash=alt.StrokeDash("s:N", scale=alt.Scale(domain=[n_obs, n_exp], range=[[1, 0], [5, 4]]), legend=None))
+    layers = [area, lines]
+    evs = [r for r in snap["decisions"] if r["home"] == h and r["i"] >= snap["start_i"]]
+    if evs:
+        pts = pd.DataFrame({"date": [r["date"] for r in evs],
+                            "v": [obs[r["i"] - snap["start_i"]] for r in evs],
+                            "a": [action_label(r["action"]) for r in evs]})
+        dom = [action_label(a) for a in ACTION]
+        layers.append(alt.Chart(pts).mark_point(filled=True, size=120, stroke="white", strokeWidth=1.5, opacity=1).encode(
+            x=x, y=alt.Y("v:Q", scale=alt.Scale(domain=ydom)),
+            color=alt.Color("a:N", scale=alt.Scale(domain=dom, range=[ACTION[a][2] for a in ACTION]),
+                            legend=alt.Legend(title=None, orient="bottom", labelColor=INK, symbolType="circle")),
+            tooltip=[alt.Tooltip("date:T", format="%Y-%m-%d"), "a:N"]))
+    ch = alt.layer(*layers).resolve_scale(color="independent", strokeDash="independent").properties(height=300, background="white", padding={"left": 8, "right": 14, "top": 14, "bottom": 6}) \
+        .configure_view(strokeWidth=0)
+    st.altair_chart(ch, width="stretch")
+
+
+def case_report(case, core):
+    """Raport text (Markdown) din dovezile calculate efectiv."""
+    last = [r for r in case["events"] if r["action"] == "CONTACTEAZA"][-1]
+    cur, price = cur_label(), float(ECON.get("price_per_kwh") or 0)
+    lines = [f"# {t('rep_title')}: {case['id']}", "", f"_{t('rep_banner')}_", "",
+             f"- {t('c_home')}: {case['home']} ({fmt(core.cap[case['home']], 2)} kW)",
+             f"- {t('c_open')}: {case['opened']:%Y-%m-%d}",
+             f"- {t('c_src')}: {src_tag(case['home'])[0]}",
+             f"- {t('c_prio')}: {fmt(case['priority'], 2)}", "",
+             f"## {t('c_expl')}", "", explain_alert(last, LANG), "", f"## {t('c_evid')}", ""]
+    for r in case["events"]:
+        lines += [f"### {r['date']:%Y-%m-%d} · {action_label(r['action'])}",
+                  f"- {t('e_cusum')}: {fmt(r['cusum'], 1)} / {fmt(core.h, 0)}",
+                  f"- {t('e_days')}: {r['n_days']}",
+                  f"- {t('e_miss')}: {pct(r['missing'])}%",
+                  f"- {t('e_exc')}: " + (t("e_exc_v", x=fmt(r["excess_kwh_h"], 2), y=fmt(r["est_pierdere_kwh_zi"], 1)) if pd.notna(r["excess_kwh_h"]) else "—"),
+                  f"- {t('e_sun')}: " + (fmt(min(max(r["solar_frac"], 0), 1), 2) if pd.notna(r["solar_frac"]) else "—"),
+                  f"- {t('e_rule')}: {decision_reason(r, core.theta)}", ""]
+    lines += [f"## {t('c_money')}", ""]
+    if case["loss_days"]:
+        lines += [t("c_acc", k=fmt(case["loss_kwh"], 1), v=fmt(case["loss_kwh"] * price, 0), cur=cur), "",
+                  t("c_acc_n", a=f"{case['period'][0]:%Y-%m-%d}", b=f"{case['period'][1]:%Y-%m-%d}", n=case["loss_days"], p=fmt(price, 2), cur=cur), ""]
+        if pd.notna(case["loss_per_day"]):
+            lines += [t("c_proj", k=fmt(case["loss_per_day"], 1), v=fmt(case["loss_per_day"] * 30 * price, 0), cur=cur), ""]
+    else:
+        lines += [t("c_noloss"), ""]
+    lines += [f"_{t('c_disc')}_", ""]
+    return "\n".join(lines)
+
+
+def demo_live(runner, core, scen, was_live):
+    runner.last_seen = time.time()
+    snap = demo_snapshot(runner)
+    live = snap["status"] in DEMO_LIVE
+    if live != was_live:
+        st.rerun()
+    # --- controale
+    c = st.columns([1, 1.25, 1, 2.2], gap="small", vertical_alignment="bottom")
+    if c[0].button(t("dm_start"), type="primary", disabled=snap["status"] != "idle", width="stretch"):
+        runner.start()
+        st.rerun()
+    if snap["status"] == "paused":
+        if c[1].button(t("dm_resume"), width="stretch"):
+            runner.resume()
+            st.rerun()
+    elif c[1].button(t("dm_pause"), disabled=snap["status"] != "running", width="stretch"):
+        runner.pause()
+        st.rerun()
+    if c[2].button(t("dm_reset"), disabled=snap["status"] == "idle" and snap["i_next"] == 0, width="stretch"):
+        runner.reset()
+        st.rerun()
+    sp = c[3].select_slider(t("dm_speed"), options=DR.SPEEDS, value=runner.sec_per_day if runner.sec_per_day in DR.SPEEDS else 1.0,
+                            format_func=lambda s: t("dm_speed_f", s=fmt(s, 2 if s < 0.5 else 1)), key="dm_speed")
+    if sp != runner.sec_per_day:
+        runner.set_speed(sp)
+    if snap["status"] == "error":
+        st.error(t("dm_err", m=snap["error"]))
+
+    # --- progres: timp simulat separat de timpul real
+    n_win = snap["end_i"] - snap["start_i"] + 1
+    done = max(0, min(n_win, snap["i_next"] - snap["start_i"]))
+    sim_d = core.days[snap["i_last"]] if snap["i_last"] >= 0 else None
+    k = st.columns([1.3, 1, 1, 1, 1], gap="medium")
+    mins, secs = divmod(int(snap["elapsed"]), 60)
+    dot = "on" if live else ""
+    k[0].markdown(f'<div class="dm-lbl"><span class="dm-dot {dot}" style="display:inline-block;margin-right:.4rem"></span>{esc(t("dm_simdate"))}</div>'
+                  f'<div class="dm-big">{esc(f"{sim_d:%Y-%m-%d}" if sim_d is not None else "—")}</div>'
+                  f'<div class="dm-track"><div class="dm-fill" style="width:{100 * done / n_win:.1f}%"></div></div>'
+                  f'<div class="dm-sm">{esc(t("dm_prog", a=done, b=n_win))} · {esc(t("dm_simnote"))} · {esc(t("dm_st_" + snap["status"]))}</div>',
+                  unsafe_allow_html=True)
+    k[1].markdown(f'<div class="dm-lbl">{esc(t("dm_real"))}</div><div class="dm-big">{mins:02d}:{secs:02d}</div>'
+                  f'<div class="dm-sm">{esc(t("dm_realnote"))}<br>{esc(t("dm_stepms", ms=fmt(snap["step_ms"], 0)) if snap["step_ms"] else "")}'
+                  f'{esc(t("dm_overrun", n=snap["overruns"]) if snap["overruns"] else "")}</div>', unsafe_allow_html=True)
+    win_dec = [r for r in snap["decisions"] if r["i"] >= snap["start_i"]]
+    for col, key, v in ((k[2], "dm_k_al", len(win_dec)), (k[3], "dm_k_cases", len(snap["cases"])), (k[4], "dm_k_notif", len(snap["notifications"]))):
+        col.markdown(f'<div class="dm-lbl">{esc(t(key))}</div><div class="dm-big">{v}</div>'
+                     f'<div class="dm-sm">{esc(t("dm_k_fleet", n=len(core.cols)))}</div>', unsafe_allow_html=True)
+    md('<div style="height:1.4rem"></div>')
+
+    # --- instalatia urmarita
+    homes = {r: scen["homes"][r] for r in ROLES if r in scen["homes"]}
+    opts = list(homes.values()) + sorted([h for h in snap["cases"] if h not in homes.values()],
+                                         key=lambda x: -snap["cases"][x]["priority"])
+    role_of = {h: r for r, h in homes.items()}
+
+    def opt_label(h):
+        if h in role_of:
+            return t("dm_home_opt", h=h, r=t("role_" + role_of[h]))
+        return t("dm_home_case", h=h, c=snap["cases"][h]["id"])
+    left, right = st.columns([2.1, 1], gap="large")
+    with left:
+        a1, a2 = st.columns([1.2, 1], vertical_alignment="bottom")
+        default = homes.get("persistent", opts[0])
+        if st.session_state.get("dm_home") not in opts:
+            st.session_state["dm_home"] = default
+        h = a1.selectbox(t("dm_track"), opts, format_func=opt_label, key="dm_home")
+        a2.markdown(f'<div style="padding-bottom:.55rem">{tag_html(h)} <span class="dm-sm">{esc(fmt(core.cap[h], 2))} kW</span></div>',
+                    unsafe_allow_html=True)
+        key, note = home_state(snap, h)
+        j = core.cols.index(h)
+        sv = float(snap["s"][j]) if snap["i_last"] >= 0 else 0.0
+        zv = snap["z"][j] if snap["i_last"] >= 0 else np.nan
+        frac = min(1.0, sv / core.h)
+        z_txt = t("dm_ztoday", z=fmt(zv, 2)) if pd.notna(zv) else t("dm_ztoday", z="—")
+        b1, b2 = st.columns([1, 1.25], gap="large")
+        b1.markdown(f'<div class="dm-lbl">{esc(t("dm_state"))}</div><span class="dm-state {STATE_CLS[key]}">{esc(t(key))}</span>'
+                    f'<div class="dm-sm">{esc(note)}</div>', unsafe_allow_html=True)
+        b2.markdown(f'<div class="dm-lbl">{esc(t("dm_cusum"))}</div>'
+                    f'<div class="dm-track" style="height:10px"><div class="dm-fill" style="width:{100 * frac:.1f}%"></div></div>'
+                    f'<div class="dm-sm">{esc(t("dm_cusum_n", s=fmt(sv, 1), h=fmt(core.h, 0), k=fmt(core.k, 1)))}<br>{esc(z_txt)}</div>',
+                    unsafe_allow_html=True)
+        demo_chart(core, snap, h, scen)
+        md(f'<div class="footnote" style="margin-top:0">{esc(t("dm_ch_note"))}</div>')
+    with right:
+        f1, f2 = st.columns([1, 1.3], vertical_alignment="center")
+        f1.markdown(f'<div class="dm-lbl" style="margin:0">{esc(t("dm_feed"))}</div>', unsafe_allow_html=True)
+        show_all = f2.toggle(t("dm_feed_all"), value=False, key="dm_feed_all")
+        watch = set(homes.values()) | {h}
+        feed = [e for e in snap["feed"] if show_all or e.get("home") is None or e.get("home") in watch]
+        last_seen = st.session_state.get("dm_feed_last", 0)
+        if feed:
+            rows = []
+            for e in reversed(feed[-150:]):
+                when = f"{e['sim_date']:%Y-%m-%d}" if e["sim_date"] is not None else ""
+                wall = time.strftime("%H:%M:%S", time.localtime(e["wall"]))
+                new = " ev-new" if e["id"] > last_seen else ""
+                rows.append(f'<div class="ev{new}"><div class="ev-dot {ev_class(e)}"></div>'
+                            f'<div class="ev-d">{esc(when)}<br>{esc(wall)}</div><div class="ev-t">{esc(ev_text(e))}</div></div>')
+            md(f'<div class="feed">{"".join(rows)}</div>')
+            st.session_state["dm_feed_last"] = feed[-1]["id"]
+        else:
+            md(f'<div class="note">{esc(t("dm_feed_none"))}</div>')
+
+    # --- cazuri
+    section("dm_eye", "dm_cases", "dm_cases_sub")
+    cases = sorted(snap["cases"].values(), key=lambda c_: -c_["priority"])
+    if not cases:
+        md(f'<div class="note">{esc(t("dm_cases_none"))}</div>')
+    else:
+        price = float(ECON.get("price_per_kwh") or 0)
+        tb = pd.DataFrame([{t("c_id"): c_["id"], t("c_home"): c_["home"], t("c_open"): f"{c_['opened']:%Y-%m-%d}",
+                            t("c_src"): src_tag(c_["home"])[0], t("c_prio"): round(c_["priority"], 2),
+                            t("c_loss"): round(c_["loss_kwh"], 1), t("c_cost", cur=cur_label()): round(c_["loss_kwh"] * price),
+                            t("c_n"): len(c_["events"])} for c_ in cases]).set_index(t("c_id"))
+        st.dataframe(tb, width="stretch", height=min(38 * len(tb) + 40, 330))
+        ids = [c_["id"] for c_ in cases]
+        pref = snap["cases"].get(h, {}).get("id")
+        if pref and st.session_state.get("dm_case_follow") != pref:
+            st.session_state["dm_case"] = pref
+            st.session_state["dm_case_follow"] = pref
+        if st.session_state.get("dm_case") not in ids:
+            st.session_state["dm_case"] = ids[0]
+        cid = st.selectbox(t("c_pick"), ids, key="dm_case",
+                           format_func=lambda x: next(f"{x} · {t('c_home').lower()} {c_['home']}" for c_ in cases if c_["id"] == x))
+        case = next(c_ for c_ in cases if c_["id"] == cid)
+        last = [r for r in case["events"] if r["action"] == "CONTACTEAZA"][-1]
+        p1, p2 = st.columns([1.2, 1], gap="large")
+        with p1:
+            md(f'<div class="card" style="height:auto"><div class="dm-lbl">{esc(t("c_expl"))}</div>{tag_html(case["home"])}'
+               f'<div class="card-p" style="margin-top:.6rem;color:#2c2c2e">{esc(explain_alert(last, LANG))}</div>'
+               f'<div class="footnote">{esc(t("c_disc"))}</div></div>')
+            md('<div style="height:.8rem"></div>')
+            cur = cur_label()
+            if case["loss_days"]:
+                pa, pb = case["period"][0].strftime("%Y-%m-%d"), case["period"][1].strftime("%Y-%m-%d")
+                money = (f'<div class="card-t">{esc(t("c_acc", k=fmt(case["loss_kwh"], 1), v=fmt(case["loss_kwh"] * price, 0), cur=cur))}</div>'
+                         f'<div class="card-p">{esc(t("c_acc_n", a=pa, b=pb, n=case["loss_days"], p=fmt(price, 2), cur=cur))}</div>')
+                if pd.notna(case["loss_per_day"]):
+                    money += f'<div class="footnote">{esc(t("c_proj", k=fmt(case["loss_per_day"], 1), v=fmt(case["loss_per_day"] * 30 * price, 0), cur=cur))}</div>'
+            else:
+                money = f'<div class="card-p">{esc(t("c_noloss"))}</div>'
+            md(f'<div class="card" style="height:auto"><div class="dm-lbl">{esc(t("c_money"))}</div>{money}</div>')
+        with p2:
+            r = case["events"][-1]
+            rows = [(t("e_date"), f"{r['date']:%Y-%m-%d} · {action_label(r['action'])}"),
+                    (t("e_cusum"), f"{fmt(r['cusum'], 1)} / {fmt(core.h, 0)}"),
+                    (t("e_days"), str(r["n_days"])), (t("e_miss"), f"{pct(r['missing'])}%"),
+                    (t("e_exc"), t("e_exc_v", x=fmt(r["excess_kwh_h"], 2), y=fmt(r["est_pierdere_kwh_zi"], 1)) if pd.notna(r["excess_kwh_h"]) else "—"),
+                    (t("e_sun"), fmt(min(max(r["solar_frac"], 0), 1), 2) if pd.notna(r["solar_frac"]) else "—"),
+                    (t("e_rule"), decision_reason(r, core.theta))]
+            tl = " · ".join(f"{x['date']:%Y-%m-%d} {action_label(x['action'])}" for x in case["events"])
+            md(f'<div class="card" style="height:auto"><div class="dm-lbl">{esc(t("c_evid"))}</div><table class="ev-tbl">'
+               + "".join(f"<tr><td>{esc(a)}</td><td>{esc(b)}</td></tr>" for a, b in rows)
+               + f'</table><div class="footnote">{esc(t("c_timeline"))}: {esc(tl)}</div></div>')
+            md('<div style="height:.6rem"></div>')
+            st.download_button(t("c_report"), case_report(case, core), file_name=f"{case['id']}_{LANG}.md", mime="text/markdown",
+                               on_click="ignore", key=f"dm_rep_{case['id']}")
+
+    # --- inbox
+    section("dm_eye", "dm_inbox", "dm_inbox_sub")
+    notes = snap["notifications"]
+    if not notes:
+        md(f'<div class="note">{esc(t("dm_inbox_none"))}</div>')
+    else:
+        show = list(reversed(notes))[:6]
+        for i, n in enumerate(show):
+            with st.expander(t("dm_notif_h", n=n["id"], c=n["case_id"], h=n["home"], d=f"{n['sim_date']:%Y-%m-%d}"), expanded=(i == 0)):
+                md(f'<span class="tag tag-sim" style="border-style:solid">{esc(t("dm_unsent"))}</span> {tag_html(n["home"])}')
+                st.code(customer_message(n["row"], ECON, lang=LANG), language=None, wrap_lines=True)
+        if len(notes) > len(show):
+            md(f'<div class="footnote">{esc(t("dm_inbox_more", a=len(show), b=len(notes)))}</div>')
+
+
+def page_demo():
+    section("dm_eye", "dm_title", "dm_sub")
+    try:
+        core = demo_core()
+    except FileNotFoundError as e:
+        st.warning(t("dm_missing", m=str(e)))
+        return
+    scen = DR.load_scenario()
+    if scen is None:
+        st.warning(t("dm_noscen"))
+        return
+    runner = demo_runner(core, scen)
+    live = runner.status in DEMO_LIVE
+    md(f'<div class="dm-banner"><span class="dm-dot {"on" if live else ""}"></span>{esc(t("dm_banner"))}</div>')
+    d0 = lambda s: f"{pd.Timestamp(s):%Y-%m-%d}"
+    first = core.days[0]
+    pre_end = pd.Timestamp(scen["start"]) - pd.Timedelta(days=1)
+    roles = " · ".join(f"<b>{esc(t('role_' + r))}</b>: {esc(t('home_plain', h=scen['homes'][r], kw=fmt(core.cap[scen['homes'][r]], 2)))} {tag_html(scen['homes'][r])}"
+                       for r in ROLES if r in scen["homes"])
+    md(f'<div class="note" style="margin-bottom:1.4rem"><b>{esc(t("dm_scen"))}.</b> '
+       f'{esc(t("dm_window", a=d0(scen["start"]), b=d0(scen["end"]), n=scen["days"], c=f"{first:%Y-%m-%d}", d=f"{pre_end:%Y-%m-%d}"))}<br>'
+       f'{roles}<br><span style="color:#86868b;font-size:.82rem">{esc(t("dm_scen_p"))} {esc(t("src_hidden"))}</span></div>')
+    st.fragment(run_every=0.5 if live else None)(demo_live)(runner, core, scen, live)
+
+
 # ================================================================== schelet
 md(CSS)
 bar_l, bar_r = st.columns([5, 1])
@@ -1222,7 +1790,7 @@ with bar_l:
     md(f'<div class="topbar"><div class="logo"></div><span class="brand-n">Dimmer</span><span class="brand-t">{esc(t("tagline"))}</span></div>')
 with bar_r:
     st.radio("Language", ["ro", "en"], horizontal=True, key="lang", format_func=lambda x: x.upper(), label_visibility="collapsed")
-PAGES = {"overview": page_overview, "cases": page_cases, "queue": page_queue, "real": page_real, "results": page_results}
+PAGES = {"overview": page_overview, "demo": page_demo, "cases": page_cases, "queue": page_queue, "real": page_real, "results": page_results}
 try:
     nav_box = st.container(key="nav")
 except TypeError:
