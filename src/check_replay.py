@@ -180,27 +180,6 @@ def test_controls(core, scen):
           sum(1 for x in threading.enumerate() if x.name == "dimmer-replay") == 0, "Reset in timpul rularii opreste firul")
 
 
-def test_skip(core, scen):
-    print("\n2b. Sari la urmatoarea alarma")
-    run = R.ReplayRunner(core, dict(scen, sec_per_day=2.0))
-    h = scen["homes"]["persistent"]
-    S = run.session
-    check(not run.skip_to_next(h), "nu se poate sari inainte de Start")
-    run.start()
-    check(wait_until(lambda: run.status == "running"), "ruleaza (2 s / zi)")
-    run.pause()
-    t0 = time.time()
-    check(run.skip_to_next(h), "saltul porneste din pauza")
-    check(not run.skip_to_next(h), "un al doilea salt simultan e refuzat")
-    ok = wait_until(lambda: run.skip is None and run.status in ("paused", "finished"), 60)
-    first = next((r for r in S.decisions if r["home"] == h and r["i"] >= S.start_i), None)
-    check(ok and first is not None and S.i_next == first["i"] + 1,
-          f"se opreste exact dupa alarma casei {h} ({first['date']:%Y-%m-%d}), in {time.time() - t0:.1f}s, si revine in pauza"
-          if first is not None else "alarma gasita")
-    check(any(e["kind"] == "skip_done" for e in S.feed), "saltul apare in jurnalul de activitate")
-    run.reset()
-
-
 def test_dedup(S):
     print("\n3. Fara duplicate")
     cid = [n["case_id"] for n in S.notifications]
@@ -297,7 +276,6 @@ def main():
         S = test_equivalence(core)
     test_no_future(core)
     test_controls(core, scen)
-    test_skip(core, scen)
     test_missing_and_errors(core, scen)
     if S is None:
         S, _ = full_replay(core)

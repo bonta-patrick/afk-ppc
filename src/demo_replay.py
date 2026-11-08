@@ -325,7 +325,6 @@ class ReplayRunner:
         self.overruns = 0
         self.real_elapsed = 0.0
         self._t_resume = None
-        self.skip = None                      # derulare rapida pana la urmatoarea alarma a unei case
 
     # --- comenzi
     def start(self):
@@ -369,33 +368,6 @@ class ReplayRunner:
             with self.lock:
                 self._new_session()
 
-    def skip_to_next(self, home):
-        """Proceseaza zilele fara pauza intre ele pana la urmatoarea alarma a casei `home` (sau finalul ferestrei).
-        Zilele trec prin acelasi lant, cu aceleasi actiuni; doar asteptarea dintre pasi dispare."""
-        with self._ctl:
-            if self.status not in ("running", "paused") or self.skip is not None:
-                return False
-            was_paused = self.status == "paused"
-            with self.lock:
-                S = self.session
-                self.skip = {"home": str(home), "k": len(S.decisions), "from": S.i_next, "was_paused": was_paused}
-                S._emit("skip", S.core.days[max(0, S.i_next - 1)], home=str(home))
-            if was_paused:
-                self.status = "running"
-                self._t_resume = time.time()
-                self._run.set()
-            return True
-
-    def _check_skip(self, S):
-        sk = self.skip
-        if sk is None:
-            return False
-        if any(r["home"] == sk["home"] for r in S.decisions[sk["k"]:]):
-            self.skip = None
-            S._emit("skip_done", S.core.days[S.i_next - 1], home=sk["home"], n_days=S.i_next - sk["from"])
-            return "pause" if sk["was_paused"] else True
-        return True
-
     def set_speed(self, sec):
         self.sec_per_day = float(sec)
 
@@ -432,12 +404,6 @@ class ReplayRunner:
                 t = time.perf_counter()
                 with self.lock:
                     S.step()
-                    sk = self._check_skip(S)
-                if sk == "pause":
-                    self.pause()
-                    continue
-                if sk:                                                   # derulare rapida: fara asteptare
-                    continue
                 dt = time.perf_counter() - t
                 if dt > self.sec_per_day:
                     self.overruns += 1
@@ -450,9 +416,6 @@ class ReplayRunner:
             if not self._stop.is_set():
                 self._account()
                 with self.lock:
-                    if self.skip is not None:
-                        S._emit("skip_none", S.core.days[S.end_i], home=self.skip["home"])
-                        self.skip = None
                     S._emit("finished", S.core.days[S.end_i], n_days=S.end_i - S.start_i + 1)
                 self.status = "finished"
         except Exception as e:  # noqa: BLE001 - eroarea se afiseaza in interfata, executia se opreste curat

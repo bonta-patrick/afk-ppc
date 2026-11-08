@@ -328,9 +328,9 @@ TX = {
               "Cases are ranked by estimated loss, under a capacity of K checks per week, each with an explanation."),
     "s4_eye": ("Decizia", "Decision"),
     "s4_title": ("Cele trei acțiuni", "The three actions"),
-    "act1_t": ("Golul urmărește soarele", "The gap follows the sun"),
+    "act1_t": ("Abaterea urmărește soarele", "The deviation follows the sun"),
     "act1_p": ("Probabil lipsește producția solară. Se pregătește un mesaj către client.", "Solar production is probably missing. A customer message is drafted."),
-    "act2_t": ("Golul nu urmărește soarele", "The gap does not follow the sun"),
+    "act2_t": ("Abaterea nu urmărește soarele", "The deviation does not follow the sun"),
     "act2_p": ("Probabil un consum nou, sau nu putem spune încă. Nu trimitem pe nimeni; reevaluăm.", "Probably a new load, or we cannot tell yet. Nobody is sent; we reassess."),
     "act3_t": ("Date insuficiente", "Insufficient data"),
     "act3_p": ("Prea puține zile cu date sau prea multe citiri lipsă. Verificăm datele înainte de orice acțiune.", "Too few days of data or too many missing readings. We check the data before any action."),
@@ -390,8 +390,8 @@ TX = {
     # --- cazuri
     "cs_eye": ("Explorator", "Explorer"),
     "cs_title": ("Un caz, pe larg", "One case, in depth"),
-    "cs_sub": ("Linia neagră e netul real al casei la orele de zi (media pe 7 zile), cea punctată e ce ar fi trebuit să arate. Golul se colorează, iar alarmele apar ca puncte.",
-               "The black line is the home's real net during daytime hours (7-day average); the dotted line is what it should have shown. The gap is shaded and alerts appear as dots."),
+    "cs_sub": ("Linia neagră e netul real al casei la orele de zi (media pe 7 zile), cea punctată e ce ar fi trebuit să arate. Diferența dintre ele se colorează, iar alarmele apar ca puncte.",
+               "The black line is the home's real net during daytime hours (7-day average); the dotted line is what it should have shown. The difference between them is shaded and alerts appear as dots."),
     "cat_fault": ("Defect simulat", "Simulated fault"),
     "cat_load": ("Consum nou simulat (panourile sunt bune)", "Simulated new load (panels are fine)"),
     "cat_real": ("Scădere reală de producție (probabil defect)", "Real production drop (probable fault)"),
@@ -692,13 +692,6 @@ TX.update({
     "dm_inbox_more": ("Sunt afișate ultimele {a} din {b} notificări.", "Showing the latest {a} of {b} notifications."),
     "dm_err": ("Replay-ul s-a oprit cu o eroare: {m}. Apăsați Reset.", "The replay stopped with an error: {m}. Press Reset."),
     "rep_title": ("Raport de caz (DEMO)", "Case report (DEMO)"),
-    "dm_skip": ("Sari la următoarea alarmă", "Skip to the next alert"),
-    "dm_skip_help": ("Procesează zilele una după alta, fără pauză între ele, prin același lanț, până la următoarea alarmă a casei urmărite. Revine apoi la starea dinainte (pauză sau rulare).",
-                     "Processes the days one after another, with no wait between them, through the same chain, until the tracked home's next alert. It then returns to the previous state (paused or running)."),
-    "dm_skipping": ("Derulare rapidă până la următoarea alarmă a casei {h}…", "Fast-forwarding to the next alert of home {h}…"),
-    "ev_skip": ("Derulare rapidă pentru casa {h}, până la următoarea alarmă.", "Fast-forward for home {h}, up to the next alert."),
-    "ev_skip_done": ("Derulare rapidă încheiată după {n} zile: casa {h} are o alarmă nouă.", "Fast-forward finished after {n} days: home {h} has a new alert."),
-    "ev_skip_none": ("Casa {h} nu mai are nicio alarmă până la finalul ferestrei.", "Home {h} has no further alert before the end of the window."),
     "dm_truth_h": ("Adevărul, ascuns pentru sistem", "The truth, hidden from the system"),
     "dm_truth_note": ("Producția reală (kWh/zi) vine din datele Ausgrid și e afișată doar până la data simulată. Pipeline-ul nu o vede.",
                       "Real production (kWh/day) comes from the Ausgrid data and is shown only up to the simulated date. The pipeline does not see it."),
@@ -1526,12 +1519,6 @@ def ev_text(e):
         return t("ev_notification", c=e["case_id"])
     if k == "notif_dedup":
         return t("ev_notif_dedup", c=e["case_id"], h=h)
-    if k == "skip":
-        return t("ev_skip", h=h)
-    if k == "skip_done":
-        return t("ev_skip_done", h=h, n=e["n_days"])
-    if k == "skip_none":
-        return t("ev_skip_none", h=h)
     return k
 
 
@@ -1561,8 +1548,7 @@ def demo_snapshot(runner):
                 "notifications": list(S.notifications),
                 "obs": S.obs[j0:j1].copy(), "exp": S.exp[j0:j1].copy(), "s": S.sh[max(0, S.i_next - 1)].copy(),
                 "z": S.zh[max(0, S.i_next - 1)].copy(), "step_ms": S.step_ms[-1] if S.step_ms else None,
-                "elapsed": runner.elapsed(), "overruns": runner.overruns, "speed": runner.sec_per_day,
-                "skip": dict(runner.skip) if runner.skip else None}
+                "elapsed": runner.elapsed(), "overruns": runner.overruns, "speed": runner.sec_per_day}
 
 
 def demo_chart(core, snap, h, scen):
@@ -1787,19 +1773,13 @@ def demo_live(runner, core, scen, was_live):
         return t("dm_home_case", h=h, c=snap["cases"][h]["id"])
     left, right = st.columns([2.1, 1], gap="large")
     with left:
-        a1, a2 = st.columns([1.25, 1], vertical_alignment="bottom")
+        a1, a2 = st.columns([1.2, 1], vertical_alignment="bottom")
         default = homes.get("persistent", opts[0])
         if st.session_state.get("dm_home") not in opts:
             st.session_state["dm_home"] = default
         h = a1.selectbox(t("dm_track"), opts, format_func=opt_label, key="dm_home")
-        skipping = snap["skip"] is not None
-        if a2.button(t("dm_skip"), help=t("dm_skip_help"), width="stretch", key="dm_skip_btn",
-                     disabled=snap["status"] not in ("running", "paused") or skipping):
-            runner.skip_to_next(h)
-            st.rerun()
-        md(f'<div style="margin:.35rem 0 .9rem 0">{tag_html(h)} <span class="dm-sm">{esc(fmt(core.cap[h], 2))} kW</span>'
-           + (f' <span class="dm-sm" style="color:#bf6f00;font-weight:600">· {esc(t("dm_skipping", h=snap["skip"]["home"]))}</span>' if skipping else "")
-           + '</div>')
+        a2.markdown(f'<div style="padding-bottom:.55rem">{tag_html(h)} <span class="dm-sm">{esc(fmt(core.cap[h], 2))} kW</span></div>',
+                    unsafe_allow_html=True)
         key, note = home_state(snap, h)
         j = core.cols.index(h)
         sv = float(snap["s"][j]) if snap["i_last"] >= 0 else 0.0
