@@ -60,7 +60,7 @@ pip install -r requirements.txt
 python -m streamlit run app/app.py
 ```
 
-Testat cu Python 3.14. Aplicația citește din `demo_data/test/` (inclus în repo, câțiva MB; doar pagina „Demo live” are nevoie în plus de `data/processed/` și `models/`, vezi 4.4) și poate fi folosită în română sau engleză (selectorul RO / EN din dreapta sus). Are șase secțiuni: ce face Dimmer, demo-ul live (secțiunea 4.4), un caz pe larg (cu butonul „Arată adevărul"), coada de verificări cu slider de capacitate, episoadele reale și tabelele de rezultate.
+Testat cu Python 3.14. Aplicația citește din `demo_data/test/` (inclus în repo, câțiva MB; doar pagina „Demo live” are nevoie în plus de `data/processed/` și `models/`, vezi 4.4) și poate fi folosită în română sau engleză (selectorul RO / EN din dreapta sus). Are patru pagini: **Prezentare** (ce face Dimmer), **Demo live** (secțiunea 4.4), **Triaj** (coada de verificări cu slider de capacitate și costuri) și **Rezultate** (tabelele de evaluare, episoadele reale și un explorator de cazuri cu butonul „Arată adevărul").
 
 ### 4.2 Lanțul complet, de la date brute
 
@@ -110,7 +110,7 @@ python src/check_replay.py               # opțional: verificările de mai jos (
 python -m streamlit run app/app.py       # apoi pagina „Demo live” → Start
 ```
 
-**Cum funcționează.** Un pas = o zi completă, pentru că modelul decide pe zile (media zilnică a abaterii pe orele 8–17, CUSUM zilnic); nu există decizii la 30 de minute. La ziua D se folosesc doar citirile nete ale zilei D, consumul de noapte din cele 28 de zile **anterioare**, radiația zilei D și starea acumulată până atunci. Data simulată și timpul real sunt afișate separat. Controale: Start, Pauză / Continuare, Reset și viteza (2 s … 0,1 s pe zi simulată). Un singur fir de execuție pe sesiune: un al doilea Start este refuzat, iar dacă o zi durează mai mult decât intervalul ales, următoarea pornește după ea (pașii nu se suprapun). Reset oprește execuția și golește doar starea demo (progres, evenimente, cazuri, deduplicare).
+**Cum funcționează.** Un pas = o zi completă, pentru că modelul decide pe zile (media zilnică a abaterii pe orele 8–17, CUSUM zilnic); nu există decizii la 30 de minute. La ziua D se folosesc doar citirile nete ale zilei D, consumul de noapte din cele 28 de zile **anterioare**, radiația zilei D și starea acumulată până atunci. Data simulată și timpul real sunt afișate separat. Controale: Start, Pauză / Continuare, Reset, viteza (2 s … 0,1 s pe zi simulată) și **Sari la următoarea alarmă**: zilele trec prin același lanț, doar fără așteptare între ele, până la următoarea alarmă a casei urmărite, apoi demo-ul revine la starea dinainte. Pentru casa urmărită, „Arată adevărul" afișează producția reală (ascunsă pentru sistem) și alarmele B1 / B2 de pe aceeași casă, toate doar până la data simulată. Harta rețelei arată toate cele 297 de instalații, colorate după stare și după dovezile CUSUM acumulate. Inboxul arată implicit doar instalațiile din scenariu și pe cea urmărită; restul sunt la un comutator distanță. Un singur fir de execuție pe sesiune: un al doilea Start este refuzat, iar dacă o zi durează mai mult decât intervalul ales, următoarea pornește după ea (pașii nu se suprapun). Reset oprește execuția și golește doar starea demo (progres, evenimente, cazuri, deduplicare).
 
 **Acțiuni automate.** O alarmă CONTACTEAZĂ din fereastra demo deschide un caz `DEMO-nnn` cu dovezile calculate (CUSUM la alarmă, zile cu date, citiri lipsă, abaterea medie, partea solară, motivul deciziei), prioritatea din triaj (pierdere estimată × parte solară, kWh/zi; nu e o probabilitate) și o notificare în **inboxul demo**. Gruparea incidentelor e regula existentă din `triage.py`: o casă are cel mult un caz deschis, iar alarmele noi se atașează la el fără o notificare nouă. Proiectul nu are niciun destinatar de test configurat, deci nimic nu pleacă din aplicație. Cazurile demo trăiesc doar în memoria sesiunii, separat de datele aplicației.
 
@@ -125,10 +125,11 @@ python -m streamlit run app/app.py       # apoi pagina „Demo live” → Start
 
 Scriptul alege după rezultatele pipeline-ului, nu după rezultate scrise de mână, iar în aplicație totul se recalculează live. Pentru rolul 3 sunt excluse casele curate, pentru că acolo un CONTACTEAZĂ e o alarmă falsă. Nu a fost nevoie de nicio anomalie injectată suplimentar. În aceeași fereastră, pe toate cele 297 de case apar și alte cazuri, inclusiv pe case cu defecte simulate și alarme false pe case curate: sunt afișate așa cum ies din pipeline.
 
-**Verificări** (`python src/check_replay.py`, 33 de verificări):
+**Verificări** (`python src/check_replay.py`, 39 de verificări):
 - replay-ul zi cu zi dă aceleași valori z, alarme, acțiuni și părți solare ca rularea obișnuită pe tot anul și ca `demo_data/test/decisions.csv` (454 de alarme);
 - o zi nu depinde de datele de după ea;
 - Start / Pauză / Continuare / Reset, inclusiv porniri simultane, funcționează fără pași suprapuși;
+- „Sari la următoarea alarmă” se oprește exact după alarma casei și revine în pauză;
 - nu apar cazuri sau notificări duplicate, iar pierderea nu numără aceleași zile de două ori;
 - zilele cu citiri lipsă și o eroare într-un pas sunt tratate fără să oprească aplicația;
 - explicațiile se generează în română și engleză.
