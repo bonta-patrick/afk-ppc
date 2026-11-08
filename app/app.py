@@ -587,6 +587,182 @@ def kpi_html():
     return out.replace("__DEC__", "," if LANG == "ro" else ".").replace("__ONE__", "1,00" if LANG == "ro" else "1.00")
 
 
+# ------------------------------------------------------------------ animatia „contorul net” (problema intr-o imagine)
+METER_TX = {
+    "eye": ("Problema într-o singură imagine", "The problem in one picture"),
+    "hint": ("Mișcă soarele și consumul, apoi bifează cele două situații.", "Move the sun and the consumption, then tick the two situations."),
+    "sky": ("panouri (GG)", "panels (GG)"), "house": ("casa (consum GC)", "home (consumption GC)"),
+    "meter": ("contor net", "net meter"), "grid": ("rețea", "grid"), "pool": ("pompă piscină", "pool pump"),
+    "gg": ("Producția panourilor", "Panel production"), "gc": ("Consumul casei", "Home consumption"),
+    "hidden": ("ascuns", "hidden"),
+    "seen": ("Furnizorul vede doar: net = consum − producție", "The utility only sees: net = consumption − production"),
+    "gap": ("Față de o zi normală cu același soare", "Versus a normal day with the same sun"),
+    "sun": ("Soare", "Sun"), "cons": ("Consumul de bază", "Base consumption"),
+    "broken": ("Panouri stricate pe jumătate", "Panels half broken"),
+    "poolc": ("Piscină nouă (+0,8 kWh/oră)", "New pool (+0.8 kWh/hour)"),
+    "unit": ("kWh/oră", "kWh/hour"),
+    "exp": ("casa trimite curent în rețea (export)", "the home sends power to the grid (export)"),
+    "imp": ("casa ia curent din rețea (import)", "the home draws power from the grid (import)"),
+    "bal": ("echilibru", "balanced"),
+    "t_both": ("Ambele deodată. Contorul vede doar suma: netul e cu {gap} kWh/oră peste o zi normală. Din numărul ăsta singur nu ai cum să le desparți.",
+               "Both at once. The meter only sees the sum: net is {gap} kWh/hour above a normal day. From this number alone you cannot tell them apart."),
+    "t_broken": ("Panourile pierd {loss} kWh în ora asta, iar netul crește cu {gap}. Coboară soarele: diferența scade odată cu el. La 0% soare, un panou stricat nu se mai vede deloc.",
+                 "The panels lose {loss} kWh this hour and net rises by {gap}. Lower the sun: the gap shrinks with it. At 0% sun, a broken panel is invisible."),
+    "t_pool": ("Piscina adaugă 0,80 kWh în fiecare oră, indiferent de soare. Pentru contor arată ca un panou stricat: netul crește cu {gap}. Coboară soarele: diferența rămâne la fel.",
+               "The pool adds 0.80 kWh every hour, whatever the sun. To the meter it looks like a broken panel: net rises by {gap}. Lower the sun: the gap stays the same."),
+    "t_norm_exp": ("Casă normală. Produce mai mult decât consumă, deci netul e negativ: trimite curent în rețea. Bifează una dintre situații.",
+                   "Normal home. It produces more than it uses, so net is negative: it sends power to the grid. Tick one of the situations."),
+    "t_norm_imp": ("Casă normală. Consumă mai mult decât produce, deci ia curent din rețea. Bifează una dintre situații.",
+                   "Normal home. It uses more than it produces, so it draws power from the grid. Tick one of the situations."),
+}
+
+METER_TEMPLATE = """
+<!doctype html><html><head><meta charset="utf-8"><style>
+:root { --ink:#1d1d1f; --mut:#86868b; --ink2:#3a3a3c; --line:rgba(0,0,0,.08); --tint:#f5f5f7; --sky:#eef4fc;
+  --blue:#0a66d6; --sun:#ff9f0a; --sun-soft:#fff4e0; --imp:#d70015; --exp:#1a9e5c; --ease:cubic-bezier(.2,.8,.2,1); }
+* { box-sizing:border-box; }
+html,body { margin:0; background:transparent; color:var(--ink); -webkit-font-smoothing:antialiased;
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",Inter,Roboto,Arial,sans-serif; }
+.card { background:#fff; border-radius:22px; padding:22px 24px 20px; border:1px solid rgba(0,0,0,.04); margin:4px;
+  box-shadow:0 1px 2px rgba(0,0,0,.04),0 10px 30px rgba(0,0,0,.05); display:grid; gap:16px;
+  opacity:0; transform:translateY(24px); animation:in .9s var(--ease) .1s forwards; }
+@keyframes in { to { opacity:1; transform:none; } }
+.hd { display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap; }
+.hd b { font-size:19px; letter-spacing:-.02em; }
+.hd span { font-size:13px; color:var(--mut); }
+.grid { display:grid; grid-template-columns:minmax(0,1.5fr) minmax(0,1fr); gap:22px; align-items:center; }
+@media (max-width:760px) { .grid { grid-template-columns:1fr; } }
+svg { width:100%; height:auto; display:block; }
+.sky { fill:var(--sky); } .ground { fill:var(--tint); }
+.house { fill:#fff; stroke:var(--ink2); stroke-width:1.6; }
+.roof { fill:var(--tint); stroke:var(--ink2); stroke-width:1.6; stroke-linejoin:round; }
+.panel { fill:var(--blue); stroke:#fff; stroke-width:1.2; transition:fill .3s, opacity .3s; }
+.panel.bad { fill:var(--mut); opacity:.55; }
+.sunc { fill:var(--sun); } .ray { stroke:var(--sun); stroke-width:2.4; stroke-linecap:round; }
+#mSun { transition:opacity .3s; }
+#mSun .rays { transform-origin:0 0; animation:spin 24s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.poolr { fill:#e3edfa; stroke:var(--blue); stroke-width:1.4; }
+.box { fill:#fff; stroke:var(--ink2); stroke-width:1.6; } .lcd { fill:var(--ink); }
+.lcdt { fill:#fbfbfd; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12px; font-weight:600; }
+.pylon { fill:none; stroke:var(--mut); stroke-width:2; stroke-linejoin:round; }
+.wire { stroke:rgba(0,0,0,.12); stroke-width:2; }
+.lbl { fill:var(--mut); font-size:11px; }
+.flow { fill:none; stroke-linecap:round; stroke-dasharray:4 8; animation:flow .9s linear infinite; transition:opacity .3s; }
+.flow.prod { stroke:var(--sun); } .flow.imp { stroke:var(--imp); } .flow.exp { stroke:var(--exp); }
+.flow.rev { animation-direction:reverse; }
+@keyframes flow { to { stroke-dashoffset:-12; } }
+#mPool { transition:opacity .35s; }
+.side { display:grid; gap:10px; font-size:14px; }
+.row { display:flex; justify-content:space-between; gap:10px; border-bottom:1px solid var(--line); padding-bottom:8px; }
+.row b, .big { font-variant-numeric:tabular-nums; }
+.hid { font-size:10.5px; color:var(--mut); border:1px dashed rgba(0,0,0,.18); border-radius:5px; padding:0 5px; margin-left:6px; }
+.seen { background:var(--tint); border-radius:16px; padding:12px 14px; }
+.seen .s { font-size:12.5px; color:var(--mut); }
+.big { font-size:32px; font-weight:700; letter-spacing:-.04em; line-height:1.15; }
+.dir { font-size:13px; color:var(--ink2); }
+.ctrls { display:flex; flex-wrap:wrap; gap:12px 26px; align-items:center; }
+.ctl { display:grid; gap:4px; font-size:13px; color:var(--ink2); min-width:180px; }
+.ctl .v { font-weight:600; color:var(--ink); font-variant-numeric:tabular-nums; }
+input[type=range] { width:100%; accent-color:var(--sun); }
+.tog { display:inline-flex; gap:8px; align-items:center; font-size:13.5px; color:var(--ink2); cursor:pointer; user-select:none; }
+.tog input { accent-color:var(--sun); width:16px; height:16px; }
+.insight { font-size:14px; line-height:1.55; background:var(--sun-soft); border-radius:14px; padding:12px 14px; min-height:3.4em; }
+@media (prefers-reduced-motion:reduce) { .card { animation:none; opacity:1; transform:none; } .flow, #mSun .rays { animation:none; } }
+</style></head><body><div class="card">
+<div class="hd"><b data-t="eye"></b><span data-t="hint"></span></div>
+<div class="grid">
+<svg viewBox="0 0 600 300" role="img">
+  <rect x="0" y="0" width="600" height="268" class="sky" rx="14"/>
+  <rect x="0" y="262" width="600" height="38" class="ground"/>
+  <g id="mSun" transform="translate(74,64)">
+    <g class="rays"><line class="ray" x1="0" y1="-38" x2="0" y2="-31"/><line class="ray" x1="0" y1="31" x2="0" y2="38"/><line class="ray" x1="-38" y1="0" x2="-31" y2="0"/><line class="ray" x1="31" y1="0" x2="38" y2="0"/><line class="ray" x1="-27" y1="-27" x2="-22" y2="-22"/><line class="ray" x1="22" y1="22" x2="27" y2="27"/><line class="ray" x1="-27" y1="27" x2="-22" y2="22"/><line class="ray" x1="22" y1="-22" x2="27" y2="-27"/></g>
+    <circle r="22" class="sunc"/>
+  </g>
+  <path id="mBeam" d="M100 84 L214 120" class="flow prod" stroke-width="2"/>
+  <polygon points="196,152 300,84 404,152" class="roof"/>
+  <g id="mPanels"><polygon class="panel" points="214,140 238,124 262,124 238,140"/><polygon class="panel" points="240,140 264,124 288,124 264,140"/><polygon class="panel" points="232,128 252,114 276,114 256,128"/></g>
+  <rect x="210" y="152" width="180" height="110" class="house"/>
+  <rect x="286" y="210" width="28" height="52" class="roof"/>
+  <rect x="228" y="172" width="34" height="26" class="roof"/>
+  <rect x="338" y="172" width="34" height="26" class="roof"/>
+  <path id="fProd" d="M250 134 L250 166" class="flow prod" stroke-width="4"/>
+  <g id="mPool" opacity="0"><rect x="96" y="232" width="92" height="26" rx="8" class="poolr"/><text x="142" y="250" text-anchor="middle" class="lbl" data-t="pool"></text><path d="M188 245 L210 245" class="wire"/></g>
+  <path d="M390 205 L560 205" class="wire"/>
+  <path id="fNet" d="M392 205 L438 205 M502 205 L556 205" class="flow imp" stroke-width="4"/>
+  <rect x="438" y="176" width="64" height="58" rx="7" class="box"/>
+  <rect x="445" y="185" width="50" height="22" rx="3" class="lcd"/>
+  <text id="mLcd" x="470" y="200.5" text-anchor="middle" class="lcdt">+0</text>
+  <text x="470" y="225" text-anchor="middle" class="lbl" data-t="meter"></text>
+  <path d="M560 262 L572 140 L584 262 M562 236 L582 236 M566 198 L578 198 M552 156 L592 156" class="pylon"/>
+  <text x="572" y="284" text-anchor="middle" class="lbl" data-t="grid"></text>
+  <text x="300" y="284" text-anchor="middle" class="lbl" data-t="house"></text>
+  <text x="250" y="108" text-anchor="middle" class="lbl" data-t="sky"></text>
+</svg>
+<div class="side">
+  <div class="row"><span><span data-t="gg"></span><span class="hid" data-t="hidden"></span></span><b id="mGG"></b></div>
+  <div class="row"><span><span data-t="gc"></span><span class="hid" data-t="hidden"></span></span><b id="mGC"></b></div>
+  <div class="seen"><div class="s" data-t="seen"></div><div class="big" id="mNet"></div><div class="dir" id="mDir"></div></div>
+  <div class="row"><span data-t="gap"></span><b id="mGap"></b></div>
+</div>
+</div>
+<div class="ctrls">
+  <label class="ctl"><span><span data-t="sun"></span> <span class="v" id="vSun"></span></span><input type="range" id="sSun" min="0" max="100" value="80"></label>
+  <label class="ctl"><span><span data-t="cons"></span> <span class="v" id="vCons"></span></span><input type="range" id="sCons" min="20" max="250" value="60"></label>
+  <label class="tog"><input type="checkbox" id="cBroken"> <span data-t="broken"></span></label>
+  <label class="tog"><input type="checkbox" id="cPool"> <span data-t="poolc"></span></label>
+</div>
+<div class="insight" id="mInsight" aria-live="polite"></div>
+</div><script>
+(function(){
+  var T = __TX__, DEC = "__DEC__", CAP = 2.0;
+  function $(s){ return document.querySelector(s); }
+  document.querySelectorAll("[data-t]").forEach(function(el){ el.textContent = T[el.dataset.t]; });
+  function f(v,d){ return Math.abs(v).toFixed(d).replace(".", DEC); }
+  function fs(v,d){ var r = Number(v.toFixed(d)); return (r > 0 ? "+" : r < 0 ? "\\u2212" : "") + f(v,d); }
+  function sub(s,o){ return s.replace(/\\{(\\w+)\\}/g, function(_,k){ return o[k]; }); }
+  var sSun=$("#sSun"), sCons=$("#sCons"), cB=$("#cBroken"), cP=$("#cPool");
+  function upd(){
+    var s = sSun.value/100, base = sCons.value/100;
+    var ggN = CAP*0.8*s, gg = ggN*(cB.checked?0.5:1), gc = base+(cP.checked?0.8:0);
+    var net = gc-gg, netN = base-ggN, gap = net-netN;
+    $("#vSun").textContent = Math.round(s*100)+"%";
+    $("#vCons").textContent = f(base,2)+" "+T.unit;
+    $("#mGG").textContent = f(gg,2)+" "+T.unit;
+    $("#mGC").textContent = f(gc,2)+" "+T.unit;
+    $("#mNet").textContent = fs(net,2)+" kWh";
+    $("#mDir").textContent = net < -0.005 ? T.exp : (net > 0.005 ? T.imp : T.bal);
+    $("#mLcd").textContent = fs(net,2);
+    $("#mGap").textContent = fs(gap,2)+" "+T.unit;
+    $("#mSun").style.opacity = String(0.2+0.8*s);
+    var beam=$("#mBeam"); beam.style.opacity = s>0.02?"1":"0"; beam.setAttribute("stroke-width", String(1+3*s));
+    document.querySelectorAll("#mPanels .panel").forEach(function(p,i){ p.classList.toggle("bad", cB.checked && i!==2); });
+    $("#mPool").setAttribute("opacity", cP.checked?"1":"0");
+    var fp=$("#fProd"); fp.style.opacity = gg>0.01?"1":"0"; fp.setAttribute("stroke-width", String(1.5+5*Math.min(1,gg/1.6)));
+    var fn=$("#fNet");
+    fn.setAttribute("class", "flow "+(net>=0?"imp rev":"exp"));
+    fn.style.opacity = Math.abs(net)>0.01?"1":"0";
+    fn.setAttribute("stroke-width", String(1.5+5*Math.min(1,Math.abs(net)/1.6)));
+    var o = {gap: fs(gap,2), loss: f(ggN*0.5,2)}, t;
+    if (cB.checked && cP.checked) t = sub(T.t_both,o);
+    else if (cB.checked) t = sub(T.t_broken,o);
+    else if (cP.checked) t = sub(T.t_pool,o);
+    else t = net<0 ? T.t_norm_exp : T.t_norm_imp;
+    $("#mInsight").textContent = t;
+  }
+  [sSun,sCons,cB,cP].forEach(function(x){ x.addEventListener("input", upd); x.addEventListener("change", upd); });
+  upd();
+})();
+</script></body></html>
+"""
+
+
+def meter_html():
+    tx = {k: v[LI] for k, v in METER_TX.items()}
+    js = json.dumps(tx, ensure_ascii=False).replace("</", "<\\/")
+    return METER_TEMPLATE.replace("__TX__", js).replace("__DEC__", "," if LANG == "ro" else ".")
+
+
 if not (DEMO / "meta.json").exists():
     st.markdown(CSS, unsafe_allow_html=True)
     st.error(t("missing_demo"))
@@ -752,6 +928,9 @@ def page_overview():
        f'<div class="hero-t">{esc(t("hero_a"))}<br><span class="grad">{esc(t("hero_b"))}</span></div>'
        f'<div class="hero-s">{esc(t("hero_sub"))}</div>'
        '<div class="fader"><i></i><b></b></div></div>')
+
+    md('<div style="height:1.6rem"></div>')
+    embed_html(meter_html(), 640)
 
     section("s1_eye", "s1_title", "s1_sub", reveal=True)
     embed_html(kpi_html(), 206)
